@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "dev": "next dev --port 3000",
+    "dev": "NODE_OPTIONS='--localstorage-file=/tmp/helix-next-ls.json' next dev --port 3000",
     "build": "next build",
     "start": "next start --port 3000",
     "typecheck": "tsc --noEmit",
@@ -11,6 +11,7 @@
     "clean": "rm -rf .next"
   },
   "dependencies": {
+    "@helix/db": "workspace:*",
     "@helix/engine": "workspace:*",
     "@helix/shared": "workspace:*",
     "next": "15.3.9",
