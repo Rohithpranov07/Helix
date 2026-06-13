@@ -5,6 +5,7 @@ import type {
   IncidentResolveReq, IncidentResolveRes,
   GenomePairReq, GenomePairRes,
   EntropyMeasureReq, EntropyMeasureRes,
+  GovernorCheckReq, GovernorCheckRes,
 } from "@helix/shared";
 
 export type { IncidentResolveReq, IncidentResolveRes } from "@helix/shared";
@@ -33,6 +34,8 @@ export type {
   Duplication, ConsolidateDeps, ConsolidateResult,
   ConsolidateEvent, ConsolidateOutcome,
 } from "./metabolism/consolidator.js";
+export { checkHomeostasis, parseWindowMs } from "./governor/homeostasis.js";
+export type { CheckHomeostasisDeps } from "./governor/homeostasis.js";
 export {
   pairGenome,
   NOT_WIRED_VERIFY_CORRECTION,
@@ -218,6 +221,12 @@ export async function genomePair(req: GenomePairReq): Promise<GenomePairRes> {
           : ""),
     ),
   };
+}
+
+export async function governorCheck(req: GovernorCheckReq): Promise<GovernorCheckRes> {
+  const { checkHomeostasis: _check } = await import("./governor/homeostasis.js");
+  const homeostasis = await _check(req.window ?? "24h");
+  return { homeostasis };
 }
 
 export async function entropyMeasure(req: EntropyMeasureReq): Promise<EntropyMeasureRes> {

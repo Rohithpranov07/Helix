@@ -149,6 +149,21 @@ export const EntropyMeasureResSchema = z.object({ point: EntropyPointSchema });
 export type EntropyMeasureReq = z.infer<typeof EntropyMeasureReqSchema>;
 export type EntropyMeasureRes = z.infer<typeof EntropyMeasureResSchema>;
 
+// governor.check
+export const GovernorCheckReqSchema = z.object({ window: z.string().default("24h") });
+export const GovernorCheckResSchema = z.object({
+  homeostasis: z.object({
+    window: z.string(),
+    generationRate: z.number(),
+    repairRate: z.number(),
+    balance: z.number(),
+    action: GovernorActionSchema,
+    hottestZones: z.array(z.string()),
+  }),
+});
+export type GovernorCheckReq = z.infer<typeof GovernorCheckReqSchema>;
+export type GovernorCheckRes = z.infer<typeof GovernorCheckResSchema>;
+
 // re-export sub-schemas for use in other packages
 export {
   VulnClassSchema,
