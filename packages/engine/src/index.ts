@@ -6,10 +6,14 @@ import type {
   EntropyMeasureReq, EntropyMeasureRes,
 } from "@helix/shared";
 
-// Stubs — real organ logic implemented in T2.1+
+export { scanTarget } from "./immune/scanner.js";
 
-export async function scanRun(_req: ScanRunReq): Promise<ScanRunRes> {
-  return { findings: [] };
+// ── Reflex handlers ──────────────────────────────────────────────────────────
+
+export async function scanRun(req: ScanRunReq): Promise<ScanRunRes> {
+  const { scanTarget } = await import("./immune/scanner.js");
+  const findings = await scanTarget(req.targetUrl);
+  return { findings };
 }
 
 export async function vulnHeal(_req: VulnHealReq): Promise<VulnHealRes> {
@@ -17,7 +21,7 @@ export async function vulnHeal(_req: VulnHealReq): Promise<VulnHealRes> {
     vulnerability: {
       class: "SQLi",
       endpoint: "/stub",
-      evidence: "stub",
+      evidence: "stub — T2.4",
       reAttack: { before: "open", after: "open" },
       status: "patching",
       detectedAt: new Date().toISOString(),
@@ -43,7 +47,7 @@ export async function genomePair(_req: GenomePairReq): Promise<GenomePairRes> {
   return {
     strand: {
       moduleId: _req.moduleId,
-      purpose: "stub",
+      purpose: "stub — T6.1",
       invariants: [],
       edgeDecisions: [],
       sourcePrompt: "stub",

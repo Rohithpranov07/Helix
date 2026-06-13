@@ -7,7 +7,9 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "lint": "eslint src --max-warnings 0",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "test": "vitest run",
+    "scan": "tsx src/scripts/scan.ts"
   },
   "dependencies": {
     "@helix/ai": "workspace:*",
@@ -15,6 +17,9 @@
     "@helix/shared": "workspace:*"
   },
   "devDependencies": {
-    "typescript": "5.9.3"
+    "@types/node": "^20.19.43",
+    "tsx": "4.22.4",
+    "typescript": "5.9.3",
+    "vitest": "4.1.8"
   }
 }
