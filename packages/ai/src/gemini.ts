@@ -1,7 +1,7 @@
 import { ExternalApiError, ValidationError } from "@helix/shared";
 import { withRetry } from "./_retry.js";
 
-const GENERATE_URL =
+const _GENERATE_URL =
   "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
 const EMBED_URL =
   "https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent";

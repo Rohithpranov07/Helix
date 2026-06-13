@@ -6,6 +6,13 @@ import type {
   EntropyMeasureReq, EntropyMeasureRes,
 } from "@helix/shared";
 
+export interface IncidentResolveReq { incidentId: string; }
+export interface IncidentResolveRes {
+  incident: import("@helix/shared").Incident;
+  healed: string[];
+  skipped: string[];
+}
+
 export { scanTarget } from "./immune/scanner.js";
 export { confirmFinding } from "./immune/confirm.js";
 export { synthesizePatch, applyInShadow, assertPatchSafe } from "./immune/patch.js";
@@ -23,6 +30,8 @@ export { spinShadow, applyToShadow, replayTraffic } from "./shadow/runtime.js";
 export type { TrafficCase, TrafficReplay } from "./shadow/runtime.js";
 export { verifyEquivalence } from "./shadow/verify.js";
 export { handleIncident } from "./nervous/incident.js";
+export { resolveIncident, extractEndpoint } from "./nervous/resolve.js";
+export type { ResolveResult, HealerFn, ResolveDeps } from "./nervous/resolve.js";
 export { promoteToTarget } from "./immune/promote.js";
 
 // ── Reflex handlers ──────────────────────────────────────────────────────────
@@ -56,6 +65,29 @@ export async function incidentHandle(req: IncidentHandleReq): Promise<IncidentHa
   const { handleIncident } = await import("./nervous/incident.js");
   const incident = await handleIncident(req);
   return { incident };
+}
+
+export async function incidentResolve(req: IncidentResolveReq): Promise<IncidentResolveRes> {
+  const { resolveIncident } = await import("./nervous/resolve.js");
+  const { healVulnerability } = await import("./immune/heal.js");
+  const { mintAntibody } = await import("./memory/mint.js");
+  const { applyInShadow } = await import("./immune/patch.js");
+  const { applyToShadow } = await import("./shadow/runtime.js");
+  const { verifyEquivalence } = await import("./shadow/verify.js");
+  const { promoteToTarget } = await import("./immune/promote.js");
+
+  return resolveIncident(req.incidentId, {
+    heal: (findingId) =>
+      healVulnerability(findingId, {
+        applyShadow: (f, p) => applyInShadow(f, p, applyToShadow),
+        verify: (changeRef) => verifyEquivalence(changeRef),
+        promote: (finding, patch) => promoteToTarget(finding, patch),
+        mint: async (finding) => {
+          const ab = await mintAntibody({ type: "vuln", ref: finding._id });
+          return ab.antibodyId;
+        },
+      }),
+  });
 }
 
 export async function genomePair(_req: GenomePairReq): Promise<GenomePairRes> {

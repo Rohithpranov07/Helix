@@ -28,9 +28,7 @@
           "deployId": "={{ $json.body.deployId }}",
           "signal": "={{ $json.body.signal }}"
         },
-        "options": {
-          "timeout": 30000
-        }
+        "options": { "timeout": 30000 }
       },
       "continueOnFail": true
     },
@@ -54,22 +52,58 @@
       }
     },
     {
-      "id": "trigger-heal",
-      "name": "HTTP: trigger vuln scan (post-rollback)",
+      "id": "scan-run",
+      "name": "HTTP: scan.run",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1020, 200],
+      "position": [1020, 160],
       "parameters": {
         "method": "POST",
         "url": "http://host.docker.internal:3000/api/reflex/scan",
         "sendBody": true,
         "contentType": "json",
-        "body": {
-          "targetUrl": "http://host.docker.internal:3001"
-        },
-        "options": {
-          "timeout": 60000
-        }
+        "body": { "targetUrl": "http://host.docker.internal:3001" },
+        "options": { "timeout": 60000 }
+      },
+      "continueOnFail": true
+    },
+    {
+      "id": "split-findings",
+      "name": "Split Out: findings",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [1260, 160],
+      "parameters": { "fieldToSplitOut": "findings" }
+    },
+    {
+      "id": "vuln-heal",
+      "name": "HTTP: vuln.heal",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1500, 160],
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:3000/api/reflex/vuln-heal",
+        "sendBody": true,
+        "contentType": "json",
+        "body": { "findingId": "={{ $json._id }}" },
+        "options": { "timeout": 120000 }
+      },
+      "continueOnFail": true
+    },
+    {
+      "id": "incident-resolve",
+      "name": "HTTP: incident.resolve",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1740, 160],
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:3000/api/reflex/incident-resolve",
+        "sendBody": true,
+        "contentType": "json",
+        "body": { "incidentId": "={{ $('HTTP: incident.handle').item.json.incident.incidentId }}" },
+        "options": { "timeout": 30000 }
       },
       "continueOnFail": true
     },
@@ -78,10 +112,10 @@
       "name": "Respond: 200 OK",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [1020, 400],
+      "position": [1980, 300],
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ { incidentId: $('HTTP: incident.handle').item.json.incident?.incidentId, causalSteps: $('HTTP: incident.handle').item.json.incident?.causalChain?.length ?? 0 } }}"
+        "responseBody": "={{ { incidentId: $('HTTP: incident.handle').item.json.incident?.incidentId, causalSteps: $('HTTP: incident.handle').item.json.incident?.causalChain?.length ?? 0, healed: $('HTTP: incident.resolve').item.json?.healed ?? [] } }}"
       }
     }
   ],
@@ -94,15 +128,22 @@
     },
     "IF: Rollback Recommended": {
       "main": [
-        [{ "node": "HTTP: trigger vuln scan (post-rollback)", "type": "main", "index": 0 }],
-        [{ "node": "Respond: 200 OK", "type": "main", "index": 0 }]
+        [{ "node": "HTTP: scan.run", "type": "main", "index": 0 }],
+        [{ "node": "HTTP: incident.resolve", "type": "main", "index": 0 }]
       ]
     },
-    "HTTP: trigger vuln scan (post-rollback)": {
+    "HTTP: scan.run": {
+      "main": [[{ "node": "Split Out: findings", "type": "main", "index": 0 }]]
+    },
+    "Split Out: findings": {
+      "main": [[{ "node": "HTTP: vuln.heal", "type": "main", "index": 0 }]]
+    },
+    "HTTP: vuln.heal": {
+      "main": [[{ "node": "HTTP: incident.resolve", "type": "main", "index": 0 }]]
+    },
+    "HTTP: incident.resolve": {
       "main": [[{ "node": "Respond: 200 OK", "type": "main", "index": 0 }]]
     }
   },
-  "settings": {
-    "executionOrder": "v1"
-  }
+  "settings": { "executionOrder": "v1" }
 }
