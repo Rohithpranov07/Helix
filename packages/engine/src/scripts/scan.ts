@@ -1,4 +1,5 @@
 #!/usr/bin/env tsx
+/* eslint-disable no-console */
 /**
  * CLI: pnpm --filter engine scan --url=http://localhost:3001
  *

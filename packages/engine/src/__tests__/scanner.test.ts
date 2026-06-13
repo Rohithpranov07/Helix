@@ -4,7 +4,11 @@ import { AuthorizationError } from "@helix/shared";
 // Mock external deps before importing scanner
 vi.mock("@helix/db", () => ({
   connectDb: vi.fn().mockResolvedValue(undefined),
-  createVulnerability: vi.fn().mockResolvedValue({ _id: "mock-id" }),
+  // Echo input back with _id — mirrors real createVulnerability behaviour.
+  createVulnerability: vi.fn().mockImplementation(async (data: unknown) => ({
+    ...(data as object),
+    _id: "mock-id",
+  })),
 }));
 vi.mock("@helix/ai", () => ({
   gemini: {

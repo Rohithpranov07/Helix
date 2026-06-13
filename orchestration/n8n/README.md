@@ -1,5 +1,39 @@
 # n8n Orchestration
 
+## Immune System workflow — import & fire
+
+The workflow is pre-built at `orchestration/n8n/workflows/immune.json`.
+
+**Import steps:**
+1. Start n8n: `docker compose up -d` (from repo root)
+2. Open http://localhost:5678 and create an owner account
+3. Go to **Workflows → Import from File** and select `orchestration/n8n/workflows/immune.json`
+4. Click **Save**, then **Activate** (toggle at top-right) to enable the 15-minute schedule
+
+**Fire the manual trigger (demo):**
+1. Open the imported workflow
+2. Click the **Manual: Run Immune Scan** node → **Execute Node**
+   — or click the top-right **Execute Workflow** button
+3. Watch the execution log: `scan.run → Split Out: findings → vuln.heal` per finding
+4. Each `vuln.heal` response contains `{ vulnerability: { status, ... }, proof? }`
+
+**Execution log shows (zero manual steps):**
+```
+Manual: Run Immune Scan → HTTP: scan.run (findings: [...])
+  → Split Out: findings (N items)
+  → HTTP: vuln.heal × N (status: healed | patching)
+```
+
+**Linux note:** `host.docker.internal` is only auto-available on macOS/Windows Docker Desktop.
+On Linux, add this to `orchestration/n8n/docker-compose.yml` under the `n8n` service:
+```yaml
+extra_hosts:
+  - "host.docker.internal:host-gateway"
+```
+
+---
+
+
 n8n is HELIX's autonomic nervous system — it fires reflex arcs (scheduled loops and event-driven triggers) that call the HELIX control plane.
 
 ## Start

@@ -14,7 +14,8 @@
   "dependencies": {
     "@helix/ai": "workspace:*",
     "@helix/db": "workspace:*",
-    "@helix/shared": "workspace:*"
+    "@helix/shared": "workspace:*",
+    "zod": "4.4.3"
   },
   "devDependencies": {
     "@types/node": "^20.19.43",

@@ -1,6 +1,6 @@
-import { AuthorizationError, ExternalApiError, type Vulnerability, type VulnClass } from "@helix/shared";
-import { connectDb } from "@helix/db";
-import { createVulnerability } from "@helix/db";
+import { AuthorizationError, type Vulnerability, type VulnClass } from "@helix/shared";
+import { connectDb, createVulnerability } from "@helix/db";
+import type { HelixDoc } from "@helix/db";
 import { gemini } from "@helix/ai";
 
 // ── Authorization gate ────────────────────────────────────────────────────────
@@ -283,7 +283,7 @@ async function detectSecretLeak(base: string): Promise<DetectorFinding | null> {
 
 // ── Main scanTarget ───────────────────────────────────────────────────────────
 
-export async function scanTarget(targetUrl: string): Promise<Vulnerability[]> {
+export async function scanTarget(targetUrl: string): Promise<HelixDoc<Vulnerability>[]> {
   assertAllowed(targetUrl);
 
   const base = targetUrl.replace(/\/$/, "");
@@ -313,13 +313,13 @@ export async function scanTarget(targetUrl: string): Promise<Vulnerability[]> {
 
   if (candidates.length === 0) return [];
 
-  // Persist to MongoDB
+  // Persist to MongoDB — capture the returned HelixDoc so _id flows to callers.
   await connectDb();
   const now = new Date().toISOString();
-  const persisted: Vulnerability[] = [];
+  const persisted: HelixDoc<Vulnerability>[] = [];
 
   for (const c of candidates) {
-    const vuln: Omit<Vulnerability, never> = {
+    const vuln: Vulnerability = {
       class: c.class,
       endpoint: c.endpoint,
       evidence: c.evidence,
@@ -328,12 +328,12 @@ export async function scanTarget(targetUrl: string): Promise<Vulnerability[]> {
       detectedAt: now,
     };
     try {
-      await createVulnerability(vuln);
-      persisted.push(vuln);
+      const doc = await createVulnerability(vuln);
+      persisted.push(doc);
     } catch (err) {
-      // Log but don't fail the whole scan on a single persist error
+      // Log but don't push — a finding without _id can't be targeted by vuln.heal.
+      // eslint-disable-next-line no-console
       console.error(`[scanner] failed to persist ${c.class}:`, err);
-      persisted.push(vuln);
     }
   }
 

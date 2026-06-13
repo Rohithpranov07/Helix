@@ -7,6 +7,14 @@ import type {
 } from "@helix/shared";
 
 export { scanTarget } from "./immune/scanner.js";
+export { confirmFinding } from "./immune/confirm.js";
+export { synthesizePatch, applyInShadow, assertPatchSafe } from "./immune/patch.js";
+export type { Patch, PatchFile, ShadowApplier, ShadowApplyResult } from "./immune/patch.js";
+export { healVulnerability, assertPromotable } from "./immune/heal.js";
+export type {
+  HealDeps, HealResult, HealRecord, HealOutcome,
+  ReAttacker, ReAttackResult, EquivalenceVerifier, AntibodyMinter, Promoter, ShadowApply,
+} from "./immune/heal.js";
 
 // ── Reflex handlers ──────────────────────────────────────────────────────────
 
@@ -16,17 +24,10 @@ export async function scanRun(req: ScanRunReq): Promise<ScanRunRes> {
   return { findings };
 }
 
-export async function vulnHeal(_req: VulnHealReq): Promise<VulnHealRes> {
-  return {
-    vulnerability: {
-      class: "SQLi",
-      endpoint: "/stub",
-      evidence: "stub — T2.4",
-      reAttack: { before: "open", after: "open" },
-      status: "patching",
-      detectedAt: new Date().toISOString(),
-    },
-  };
+export async function vulnHeal(req: VulnHealReq): Promise<VulnHealRes> {
+  const { healVulnerability } = await import("./immune/heal.js");
+  const { vulnerability, proof } = await healVulnerability(req.findingId);
+  return proof ? { vulnerability, proof } : { vulnerability };
 }
 
 export async function incidentHandle(_req: IncidentHandleReq): Promise<IncidentHandleRes> {
