@@ -354,12 +354,36 @@ function GenomePanel() {
     }
   }, [loadConnections, loadDrifts]);
 
+  function parseGitHubUrl(raw: string): { owner: string; repo: string } | null {
+    const s = raw.trim().replace(/\.git$/, "");
+    // Full URL: https://github.com/owner/repo
+    const urlMatch = /github\.com\/([^/\s]+)\/([^/\s]+)/.exec(s);
+    if (urlMatch) return { owner: urlMatch[1]!, repo: urlMatch[2]! };
+    // owner/repo shorthand
+    const slashMatch = /^([^/\s]+)\/([^/\s]+)$/.exec(s);
+    if (slashMatch) return { owner: slashMatch[1]!, repo: slashMatch[2]! };
+    return null;
+  }
+
+  function handleRepoInput(raw: string) {
+    const parsed = parseGitHubUrl(raw);
+    if (parsed) {
+      setOwner(parsed.owner);
+      setRepo(parsed.repo);
+    } else {
+      setRepo(raw);
+    }
+  }
+
   function connectOAuth() {
-    if (!owner.trim() || !repo.trim()) {
-      setPanelError("Enter owner and repo before connecting.");
+    const effectiveOwner = owner.trim();
+    const effectiveRepo = repo.trim();
+    if (!effectiveOwner || !effectiveRepo) {
+      setPanelError("Enter a GitHub URL or owner + repo name before connecting.");
       return;
     }
-    window.location.href = `/api/auth/github?owner=${encodeURIComponent(owner.trim())}&repo=${encodeURIComponent(repo.trim())}`;
+    setPanelError(null);
+    window.location.href = `/api/auth/github?owner=${encodeURIComponent(effectiveOwner)}&repo=${encodeURIComponent(effectiveRepo)}`;
   }
 
   async function selectRepo(conn: GitHubConnection) {
@@ -495,21 +519,30 @@ function GenomePanel() {
       )}
 
       {/* Connect Form */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr auto", gap: 8, alignItems: "end", marginBottom: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr auto", gap: 8, alignItems: "end", marginBottom: 8 }}>
         <div>
-          <div style={{ fontSize: 11, color: "#64748b", marginBottom: 4 }}>GitHub Owner</div>
-          <input style={inputStyle} value={owner} onChange={(e) => setOwner(e.target.value)} placeholder="octocat" />
+          <div style={{ fontSize: 11, color: "#64748b", marginBottom: 4 }}>
+            GitHub Repository <span style={{ color: "#475569" }}>(URL or owner/repo)</span>
+          </div>
+          <input
+            style={inputStyle}
+            value={repo && owner ? `${owner}/${repo}` : repo}
+            onChange={(e) => handleRepoInput(e.target.value)}
+            placeholder="https://github.com/octocat/my-repo  or  octocat/my-repo"
+          />
         </div>
         <div>
-          <div style={{ fontSize: 11, color: "#64748b", marginBottom: 4 }}>Repository</div>
-          <input style={inputStyle} value={repo} onChange={(e) => setRepo(e.target.value)} placeholder="my-repo" />
-        </div>
-        <div>
-          <div style={{ fontSize: 11, color: "#64748b", marginBottom: 4 }}>Intent doc paths (comma-sep)</div>
+          <div style={{ fontSize: 11, color: "#64748b", marginBottom: 4 }}>Intent doc paths <span style={{ color: "#475569" }}>(comma-sep, optional)</span></div>
           <input style={inputStyle} value={intentDocs} onChange={(e) => setIntentDocs(e.target.value)} placeholder="docs/PRD.md,ARCHITECTURE.md" />
         </div>
         <button style={btnPrimary} onClick={connectOAuth}>Connect via GitHub</button>
       </div>
+      {owner && repo && (
+        <div style={{ fontSize: 11, color: "#475569", marginBottom: 12 }}>
+          Parsed: owner = <span style={{ color: "#94a3b8", fontFamily: "monospace" }}>{owner}</span>
+          {" "}/ repo = <span style={{ color: "#94a3b8", fontFamily: "monospace" }}>{repo}</span>
+        </div>
+      )}
 
       {/* Connected repos */}
       {connections.length > 0 && (
