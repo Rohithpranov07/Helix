@@ -8,6 +8,8 @@
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "clean": "turbo run clean",
+    "setup": "node scripts/setup.mjs",
+    "demo": "node scripts/demo.mjs",
     "n8n:ping": "node --env-file=.env scripts/n8n-sync.mjs ping",
     "n8n:list": "node --env-file=.env scripts/n8n-sync.mjs list",
     "n8n:push": "node --env-file=.env scripts/n8n-sync.mjs push",
