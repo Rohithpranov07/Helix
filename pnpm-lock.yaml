@@ -72,6 +72,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@helix/ai':
+        specifier: workspace:*
+        version: link:../../packages/ai
       '@helix/db':
         specifier: workspace:*
         version: link:../../packages/db
@@ -90,6 +93,9 @@ importers:
       react-dom:
         specifier: 19.2.7
         version: 19.2.7(react@19.2.7)
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
     devDependencies:
       '@tailwindcss/postcss':
         specifier: 4.3.1

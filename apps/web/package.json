@@ -11,12 +11,14 @@
     "clean": "rm -rf .next"
   },
   "dependencies": {
+    "@helix/ai": "workspace:*",
     "@helix/db": "workspace:*",
     "@helix/engine": "workspace:*",
     "@helix/shared": "workspace:*",
     "next": "15.3.9",
     "react": "19.2.7",
-    "react-dom": "19.2.7"
+    "react-dom": "19.2.7",
+    "zod": "4.4.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "4.3.1",

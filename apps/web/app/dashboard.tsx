@@ -150,6 +150,104 @@ function Sparkline({ data }: { data: Array<{ ts: string; temperature: number }> 
   );
 }
 
+// ── Voice briefing helpers ────────────────────────────────────────────────────
+
+function playBase64Audio(b64: string) {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const blob = new Blob([bytes], { type: "audio/wav" });
+  const url = URL.createObjectURL(blob);
+  const audio = new Audio(url);
+  audio.onended = () => URL.revokeObjectURL(url);
+  void audio.play();
+}
+
+interface VoiceState {
+  loading: boolean;
+  text: string | null;
+  error: string | null;
+}
+
+function IncidentVoicePanel({ incidentId }: { incidentId: string }) {
+  const [report, setReport] = useState<VoiceState>({ loading: false, text: null, error: null });
+  const [ask, setAsk] = useState<{ transcript: string; answer: string } | null>(null);
+  const [recording, setRecording] = useState(false);
+
+  async function fetchReport() {
+    setReport({ loading: true, text: null, error: null });
+    try {
+      const res = await fetch("/api/voice/report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ incidentId }),
+      });
+      const json = (await res.json()) as { text?: string; audio?: string | null; error?: string };
+      if (!res.ok || json.error) throw new Error(json.error ?? `HTTP ${res.status}`);
+      if (json.audio) playBase64Audio(json.audio);
+      setReport({ loading: false, text: json.text ?? null, error: null });
+    } catch (e) {
+      setReport({ loading: false, text: null, error: e instanceof Error ? e.message : "failed" });
+    }
+  }
+
+  async function startAsk() {
+    if (!navigator.mediaDevices) return;
+    setRecording(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      const chunks: Blob[] = [];
+      recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+      recorder.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const blob = new Blob(chunks, { type: "audio/wav" });
+        const buf = await blob.arrayBuffer();
+        const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+        const res = await fetch("/api/voice/ask", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ incidentId, audio: b64 }),
+        });
+        const json = (await res.json()) as { transcript?: string; answer?: string; audio?: string | null };
+        if (json.audio) playBase64Audio(json.audio);
+        setAsk({ transcript: json.transcript ?? "", answer: json.answer ?? "" });
+        setRecording(false);
+      };
+      recorder.start();
+      setTimeout(() => { if (recorder.state === "recording") recorder.stop(); }, 5000);
+    } catch {
+      setRecording(false);
+    }
+  }
+
+  const btnStyle: React.CSSProperties = {
+    fontSize: 11, padding: "3px 8px", borderRadius: 4, border: "1px solid #334155",
+    background: "#1e293b", color: "#94a3b8", cursor: "pointer", marginRight: 4,
+  };
+
+  return (
+    <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 4 }}>
+      <div>
+        <button style={btnStyle} onClick={() => { void fetchReport(); }} disabled={report.loading}>
+          {report.loading ? "…" : "▶ Briefing"}
+        </button>
+        <button style={btnStyle} onClick={() => { void startAsk(); }} disabled={recording}>
+          {recording ? "● Recording…" : "🎤 Ask"}
+        </button>
+      </div>
+      {report.text && <div style={{ fontSize: 11, color: "#94a3b8", fontStyle: "italic" }}>{report.text}</div>}
+      {report.error && <div style={{ fontSize: 11, color: "#ef4444" }}>{report.error}</div>}
+      {ask && (
+        <div style={{ fontSize: 11, color: "#94a3b8" }}>
+          <span style={{ color: "#475569" }}>Q: </span>{ask.transcript}<br />
+          <span style={{ color: "#475569" }}>A: </span>{ask.answer}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 
 export default function Dashboard() {
@@ -372,24 +470,26 @@ export default function Dashboard() {
                   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                     {nv.recent.map((inc) => (
                       <div key={inc.incidentId} style={{
-                        display: "flex", alignItems: "center", justifyContent: "space-between",
                         background: "#1e293b", borderRadius: 6, padding: "8px 12px",
                         borderLeft: `3px solid ${inc.resolved ? "#22c55e" : "#f97316"}`,
                       }}>
-                        <div>
-                          <div style={{ fontSize: 12, fontFamily: "monospace", color: "#94a3b8" }}>{inc.incidentId}</div>
-                          <div style={{ fontSize: 11, color: "#475569", marginTop: 2 }}>
-                            impact: {fmtImpact(inc.userImpactSeconds)} · {fmtAgo(inc.detectedAt)}
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                          <div>
+                            <div style={{ fontSize: 12, fontFamily: "monospace", color: "#94a3b8" }}>{inc.incidentId}</div>
+                            <div style={{ fontSize: 11, color: "#475569", marginTop: 2 }}>
+                              impact: {fmtImpact(inc.userImpactSeconds)} · {fmtAgo(inc.detectedAt)}
+                            </div>
+                          </div>
+                          <div style={{
+                            fontSize: 10, fontWeight: 600, letterSpacing: "0.05em",
+                            color: inc.resolved ? "#22c55e" : "#f97316",
+                            background: inc.resolved ? "#052e16" : "#431407",
+                            padding: "2px 8px", borderRadius: 4,
+                          }}>
+                            {inc.resolved ? "RESOLVED" : "OPEN"}
                           </div>
                         </div>
-                        <div style={{
-                          fontSize: 10, fontWeight: 600, letterSpacing: "0.05em",
-                          color: inc.resolved ? "#22c55e" : "#f97316",
-                          background: inc.resolved ? "#052e16" : "#431407",
-                          padding: "2px 8px", borderRadius: 4,
-                        }}>
-                          {inc.resolved ? "RESOLVED" : "OPEN"}
-                        </div>
+                        {inc.resolved && <IncidentVoicePanel incidentId={inc.incidentId} />}
                       </div>
                     ))}
                   </div>
