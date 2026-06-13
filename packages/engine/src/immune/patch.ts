@@ -8,10 +8,15 @@
  *   applier throws — the Shadow invariant is preserved by construction.
  */
 import { z } from "zod";
+import { writeFileSync, mkdirSync } from "fs";
+import { resolve } from "path";
 import { ValidationError, type Vulnerability, type VulnClass } from "@helix/shared";
 import { sarvam } from "@helix/ai";
 import { connectDb, updateVulnerability } from "@helix/db";
 import type { HelixDoc } from "@helix/db";
+
+// T4.2 reads this file to discover vulnClass + endpoint from a changeRef alone.
+const SHADOW_STAGING = resolve(__dirname, "../../../../shadow/staging");
 
 // ── Patch contract (engine-internal) ──────────────────────────────────────────
 
@@ -217,6 +222,20 @@ export async function applyInShadow(
   await connectDb();
 
   const applied = await applier(patch);
+
+  // Write staging metadata so T4.2 verifyEquivalence can discover the
+  // vulnerability class and endpoint from changeRef (patchRef) alone.
+  const metaDir = resolve(SHADOW_STAGING, applied.patchRef);
+  mkdirSync(metaDir, { recursive: true });
+  writeFileSync(
+    resolve(metaDir, "meta.json"),
+    JSON.stringify({
+      findingId: finding._id,
+      vulnClass: finding.class,
+      endpoint: finding.endpoint,
+    }),
+    "utf8",
+  );
 
   await updateVulnerability(finding._id, {
     status: "patching",
