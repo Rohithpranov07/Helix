@@ -26,7 +26,12 @@ export { spinShadow, applyToShadow, replayTraffic } from "./shadow/runtime.js";
 export type { TrafficCase, TrafficReplay } from "./shadow/runtime.js";
 export { verifyEquivalence } from "./shadow/verify.js";
 export { captureIntent, seedShopLite, SHOPLITE_MODULES } from "./genome/capture.js";
-export { pairGenome, NOT_WIRED_VERIFY_CORRECTION } from "./genome/pair.js";
+export {
+  pairGenome,
+  NOT_WIRED_VERIFY_CORRECTION,
+  inferVulnClassFromInvariant,
+  parsePatchFilePath,
+} from "./genome/pair.js";
 export type { PairMismatch, CorrectionProposal, PairGenomeResult, PairGenomeDeps } from "./genome/pair.js";
 export { handleIncident } from "./nervous/incident.js";
 export { resolveIncident, extractEndpoint } from "./nervous/resolve.js";
@@ -144,12 +149,66 @@ export async function incidentResolve(req: IncidentResolveReq): Promise<Incident
 }
 
 export async function genomePair(req: GenomePairReq): Promise<GenomePairRes> {
-  const { pairGenome: _pairGenome } = await import("./genome/pair.js");
-  const result = await _pairGenome(req.moduleId);
+  const { pairGenome: _pairGenome, inferVulnClassFromInvariant, parsePatchFilePath } = await import("./genome/pair.js");
+  const { applyToShadow } = await import("./shadow/runtime.js");
+  const { verifyEquivalence } = await import("./shadow/verify.js");
+  const { writeFileSync, mkdirSync } = await import("fs");
+  const { resolve } = await import("path");
+
+  const REPO_ROOT = resolve(__dirname, "../../..");
+  const SHADOW_STAGING = resolve(REPO_ROOT, "shadow/staging");
+
+  const result = await _pairGenome(req.moduleId, {
+    // ── SHADOW GATE ──────────────────────────────────────────────────────────
+    // Wire verifyCorrection to the real Shadow chain:
+    //   1. Parse the unified diff to extract the target file path.
+    //   2. Build a Patch object and apply it to the Shadow twin only.
+    //   3. Write staging meta.json so verifyEquivalence can resolve class + endpoint.
+    //   4. Run verifyEquivalence: replay traffic, Sarvam judges, persist shadow_proof.
+    //   5. Return the proof — caller attaches it to the CorrectionProposal.
+    // The real target is NEVER written here. Only the Shadow twin is touched.
+    verifyCorrection: async (proposal) => {
+      const filePath = parsePatchFilePath(proposal.suggestedPatch);
+      if (!filePath) {
+        throw new Error(
+          `verifyCorrection: cannot parse file path from suggestedPatch for ${proposal.invariantId}`,
+        );
+      }
+
+      const patch = {
+        files: [{ path: filePath, diff: proposal.suggestedPatch }],
+        rationale: proposal.explanation,
+      };
+
+      // Apply to Shadow only — never the real target.
+      const applied = await applyToShadow(patch);
+
+      // Write meta.json so verifyEquivalence can build the right traffic cases.
+      const vulnClass = inferVulnClassFromInvariant(
+        proposal.invariantRule,
+        proposal.invariantCompliance,
+      );
+      const endpoint = `/${filePath.split("/").slice(-1)[0]?.replace(/\.(tsx?|jsx?)$/, "") ?? "check"}`;
+      mkdirSync(resolve(SHADOW_STAGING, applied.patchRef), { recursive: true });
+      writeFileSync(
+        resolve(SHADOW_STAGING, applied.patchRef, "meta.json"),
+        JSON.stringify({ findingId: proposal.invariantId, vulnClass, endpoint }),
+        "utf8",
+      );
+
+      // Verify equivalence — Sarvam judges whether the fix holds without regressions.
+      return verifyEquivalence(applied.patchRef);
+    },
+  });
+
   return {
     strand: result.strand,
     mismatches: result.mismatches.map(
-      (m) => `${m.invariantId}: [${m.type}] ${m.description} — ${m.evidenceRef}`,
+      (m) =>
+        `${m.invariantId}: [${m.type}] ${m.description} — ${m.evidenceRef}` +
+        (result.corrections.find((c) => c.invariantId === m.invariantId)?.promotable
+          ? " ✓ correction Shadow-verified"
+          : ""),
     ),
   };
 }
