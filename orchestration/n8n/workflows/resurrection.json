@@ -1,0 +1,154 @@
+{
+  "name": "HELIX Resurrection Reflex",
+  "nodes": [
+    {
+      "id": "res-webhook",
+      "name": "Webhook: Deploy Signal",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 300],
+      "parameters": {
+        "path": "helix-resurrect",
+        "httpMethod": "POST",
+        "responseMode": "responseNode"
+      }
+    },
+    {
+      "id": "res-demo-trigger",
+      "name": "Manual: Demo Breaking Deploy",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [200, 520],
+      "parameters": {}
+    },
+    {
+      "id": "res-demo-payload",
+      "name": "Code: Demo Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 520],
+      "parameters": {
+        "jsCode": "// Simulate a known-breaking deploy: SQLi in /api/products/search\n// This is the demo trigger for the Resurrection Reflex showcase.\nreturn [{\n  json: {\n    body: {\n      deployId: 'demo-deploy-sqli-' + Date.now(),\n      signal: {\n        url: 'http://host.docker.internal:3001/api/products/search',\n        method: 'GET',\n        status: 500,\n        latencyMs: 8500,\n        baselineLatencyMs: 150,\n        error: 'unterminated string literal in SQL query',\n        message: 'SQL injection detected in search endpoint post-deploy. All product rows returned to unauthenticated attacker.'\n      }\n    }\n  }\n}];"
+      }
+    },
+    {
+      "id": "res-incident-handle",
+      "name": "HTTP: incident.handle",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [700, 380],
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:3000/api/reflex/incident-handle",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ deployId: $json.body.deployId, signal: $json.body.signal }) }}",
+        "options": { "timeout": 120000 }
+      },
+      "continueOnFail": true
+    },
+    {
+      "id": "res-check-rollback",
+      "name": "IF: Rollback Detected",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [960, 380],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": false },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.incident.rollbackAt }}",
+              "rightValue": "",
+              "operator": { "type": "string", "operation": "notEmpty" }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "res-incident-resolve",
+      "name": "HTTP: incident.resolve",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1220, 220],
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:3000/api/reflex/incident-resolve",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ incidentId: $('HTTP: incident.handle').item.json.incident.incidentId }) }}",
+        "options": { "timeout": 120000 }
+      },
+      "continueOnFail": true
+    },
+    {
+      "id": "res-voice-report",
+      "name": "HTTP: voice.report",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1480, 220],
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:3000/api/reflex/voice-report",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ incidentId: $('HTTP: incident.handle').item.json.incident?.incidentId, antibodyId: $('HTTP: incident.handle').item.json.incident?.antibodyId ?? $('HTTP: incident.resolve').item.json?.incident?.antibodyId }) }}",
+        "options": { "timeout": 30000 }
+      },
+      "continueOnFail": true
+    },
+    {
+      "id": "res-respond-healed",
+      "name": "Respond: Resurrection Report",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1740, 220],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: $('HTTP: incident.handle').item.json.incident?.antibodyId ? 'immunised' : 'escalated', incidentId: $('HTTP: incident.handle').item.json.incident?.incidentId, deployId: $('HTTP: incident.handle').item.json.incident?.deployId, causalSteps: $('HTTP: incident.handle').item.json.incident?.causalChain?.length ?? 0, rollbackAt: $('HTTP: incident.handle').item.json.incident?.rollbackAt, fixRef: $('HTTP: incident.handle').item.json.incident?.fixRef ?? $('HTTP: incident.resolve').item.json?.incident?.fixRef, antibodyId: $('HTTP: incident.handle').item.json.incident?.antibodyId ?? $('HTTP: incident.resolve').item.json?.incident?.antibodyId, userImpactSeconds: $('HTTP: incident.handle').item.json.incident?.userImpactSeconds, healed: $('HTTP: incident.resolve').item.json?.healed ?? [], skipped: $('HTTP: incident.resolve').item.json?.skipped ?? [], zeroHumanSteps: true }) }}"
+      }
+    },
+    {
+      "id": "res-respond-stable",
+      "name": "Respond: System Stable",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1220, 560],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'stable', incidentId: $json.incident?.incidentId, deployId: $json.incident?.deployId, causalSteps: $json.incident?.causalChain?.length ?? 0, rollbackAt: null, message: 'Deploy within normal parameters — no healing required.', zeroHumanSteps: true }) }}"
+      }
+    }
+  ],
+  "connections": {
+    "Webhook: Deploy Signal": {
+      "main": [[{ "node": "HTTP: incident.handle", "type": "main", "index": 0 }]]
+    },
+    "Manual: Demo Breaking Deploy": {
+      "main": [[{ "node": "Code: Demo Payload", "type": "main", "index": 0 }]]
+    },
+    "Code: Demo Payload": {
+      "main": [[{ "node": "HTTP: incident.handle", "type": "main", "index": 0 }]]
+    },
+    "HTTP: incident.handle": {
+      "main": [[{ "node": "IF: Rollback Detected", "type": "main", "index": 0 }]]
+    },
+    "IF: Rollback Detected": {
+      "main": [
+        [{ "node": "HTTP: incident.resolve", "type": "main", "index": 0 }],
+        [{ "node": "Respond: System Stable", "type": "main", "index": 0 }]
+      ]
+    },
+    "HTTP: incident.resolve": {
+      "main": [[{ "node": "HTTP: voice.report", "type": "main", "index": 0 }]]
+    },
+    "HTTP: voice.report": {
+      "main": [[{ "node": "Respond: Resurrection Report", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "executionOrder": "v1" }
+}

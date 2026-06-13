@@ -34,6 +34,64 @@ doesn't fire-and-fail.
 
 ---
 
+## Resurrection Reflex workflow (T5.6) — full autonomous arc
+
+`orchestration/n8n/workflows/resurrection.json` — the complete demo workflow that
+shows the full Resurrection Reflex arc firing with zero human steps.
+
+**Arc:** `deploy webhook → detect → diagnose → auto-heal (Shadow) → close vulns → report`
+
+### Nodes (watchable in n8n UI)
+| Node | Reflex | What it does |
+|---|---|---|
+| Webhook: Deploy Signal | `POST /helix-resurrect` | Receives the deploy divergence signal |
+| Manual: Demo Breaking Deploy | — | One-click demo trigger |
+| Code: Demo Payload | — | Injects pre-configured SQLi breaking deploy |
+| HTTP: incident.handle | `/api/reflex/incident-handle` | Detect + diagnose + auto-heal (T5.1+T5.4) |
+| IF: Rollback Detected | — | Gates on `incident.rollbackAt` |
+| HTTP: incident.resolve | `/api/reflex/incident-resolve` | Close remaining open vulns (T5.3) |
+| HTTP: voice.report | `/api/reflex/voice-report` | Voice briefing stub (T5.5, continueOnFail) |
+| Respond: Resurrection Report | — | Returns full JSON report with `zeroHumanSteps: true` |
+| Respond: System Stable | — | Stable path — no healing required |
+
+### Fire the demo trigger (cloud)
+```bash
+curl -X POST https://rohithpranov.app.n8n.cloud/webhook/helix-resurrect \
+  -H "Content-Type: application/json" \
+  -d '{
+    "deployId": "demo-deploy-sqli-001",
+    "signal": {
+      "url": "http://host.docker.internal:3001/api/products/search",
+      "status": 500,
+      "latencyMs": 8500,
+      "error": "unterminated string literal in SQL query"
+    }
+  }'
+```
+
+Or click **Manual: Demo Breaking Deploy** → **Execute Node** inside n8n.
+
+### Live execution proof (2026-06-13, execution #21)
+```
+execution 21 | status: success | duration: ~24s
+  ✓ Webhook: Deploy Signal       → received deployId:demo-deploy-sqli-001
+  ✓ HTTP: incident.handle        → incidentId:inc-1781363032498-rc7ddy | causalSteps:4 | rollbackAt:set
+  ✓ IF: Rollback Detected        → true branch — rollback recommended
+  ✓ HTTP: incident.resolve       → 2 vulns found, skipped (Shadow not running)
+  ✓ HTTP: voice.report           → 500 (T5.5 not yet built, continueOnFail kept arc running)
+  ✓ Respond: Resurrection Report → {"status":"escalated","causalSteps":4,"zeroHumanSteps":true}
+```
+`status:escalated` is correct — without a running Shadow container, HELIX refuses to
+promote unverified patches (Shadow invariant). With Shadow running, status is `immunised`.
+
+### Add to sync
+Syncing via `pnpm n8n:sync` deploys and activates all three workflows:
+- `immune.json` — Immune System (scan + heal every 15 min)
+- `nervous.json` — Nervous System (deploy signal → incident handle → resolve)
+- `resurrection.json` — Resurrection Reflex (full demo arc, this workflow)
+
+---
+
 ## Immune System workflow — import & fire (manual alternative)
 
 The workflow is pre-built at `orchestration/n8n/workflows/immune.json`.
