@@ -25,6 +25,7 @@ export type { AntibodyMatch, RecurrenceReport } from "./memory/recall.js";
 export { spinShadow, applyToShadow, replayTraffic } from "./shadow/runtime.js";
 export type { TrafficCase, TrafficReplay } from "./shadow/runtime.js";
 export { verifyEquivalence } from "./shadow/verify.js";
+export { captureIntent, seedShopLite, SHOPLITE_MODULES } from "./genome/capture.js";
 export { handleIncident } from "./nervous/incident.js";
 export { resolveIncident, extractEndpoint } from "./nervous/resolve.js";
 export type { ResolveResult, HealerFn, ResolveDeps } from "./nervous/resolve.js";
@@ -140,19 +141,10 @@ export async function incidentResolve(req: IncidentResolveReq): Promise<Incident
   });
 }
 
-export async function genomePair(_req: GenomePairReq): Promise<GenomePairRes> {
-  return {
-    strand: {
-      moduleId: _req.moduleId,
-      purpose: "stub — T6.1",
-      invariants: [],
-      edgeDecisions: [],
-      sourcePrompt: "stub",
-      generatedBy: { model: "stub", version: "0" },
-      pairing: { score: 0, lastChecked: new Date().toISOString(), unpairedInvariants: [] },
-    },
-    mismatches: [],
-  };
+export async function genomePair(req: GenomePairReq): Promise<GenomePairRes> {
+  const { captureIntent: _captureIntent } = await import("./genome/capture.js");
+  const strand = await _captureIntent(req.moduleId);
+  return { strand, mismatches: [] };
 }
 
 export async function entropyMeasure(_req: EntropyMeasureReq): Promise<EntropyMeasureRes> {
