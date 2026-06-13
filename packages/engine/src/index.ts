@@ -28,6 +28,8 @@ export { verifyEquivalence } from "./shadow/verify.js";
 export { handleIncident } from "./nervous/incident.js";
 export { resolveIncident, extractEndpoint } from "./nervous/resolve.js";
 export type { ResolveResult, HealerFn, ResolveDeps } from "./nervous/resolve.js";
+export { healIncident, synthesizeIncidentPatch } from "./nervous/heal.js";
+export type { HealIncidentDeps, HealIncidentResult, HealIncidentEvent, HealIncidentOutcome, IncidentSynthResult } from "./nervous/heal.js";
 export { promoteToTarget } from "./immune/promote.js";
 
 // ── Reflex handlers ──────────────────────────────────────────────────────────
@@ -59,7 +61,59 @@ export async function vulnHeal(req: VulnHealReq): Promise<VulnHealRes> {
 
 export async function incidentHandle(req: IncidentHandleReq): Promise<IncidentHandleRes> {
   const { handleIncident } = await import("./nervous/incident.js");
+  const { healIncident: _healIncident } = await import("./nervous/heal.js");
+  const { mintAntibody: _mintAntibody } = await import("./memory/mint.js");
+  const { applyToShadow } = await import("./shadow/runtime.js");
+  const { verifyEquivalence } = await import("./shadow/verify.js");
+  const { assertPatchSafe } = await import("./immune/patch.js");
+  const { spawnSync } = await import("child_process");
+  const { writeFileSync, mkdirSync } = await import("fs");
+  const { resolve } = await import("path");
+
   const incident = await handleIncident(req);
+
+  // Auto-heal when Sarvam recommended rollback — full autonomous cure loop.
+  if (incident.rollbackAt) {
+    try {
+      const REPO_ROOT = resolve(__dirname, "../../..");
+      const healed = await _healIncident(incident, {
+        applyShadow: (patch) => applyToShadow(patch),
+        verify: (changeRef) => verifyEquivalence(changeRef),
+        promote: async (patch) => {
+          // Apply the Shadow-proven diff to the real apps/target/ source tree.
+          // Mirrors promoteToTarget logic without requiring a finding reference.
+          assertPatchSafe(patch);
+          const promoRef = `promote-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+          const stagingDir = resolve(REPO_ROOT, "shadow/staging", promoRef);
+          mkdirSync(stagingDir, { recursive: true });
+          for (let i = 0; i < patch.files.length; i++) {
+            const file = patch.files[i];
+            if (!file) continue;
+            const diffFile = resolve(stagingDir, `${i}.patch`);
+            writeFileSync(diffFile, file.diff, "utf8");
+            const r = spawnSync(
+              "patch",
+              ["-p1", "--no-backup-if-mismatch", "-i", diffFile],
+              { cwd: REPO_ROOT, encoding: "utf8", timeout: 15_000 },
+            );
+            if (r.status !== 0) {
+              throw new Error(
+                `promote failed for ${file.path}:\n${r.stdout ?? ""}${r.stderr ?? ""}`,
+              );
+            }
+          }
+        },
+        mint: async (incidentId) => {
+          const ab = await _mintAntibody({ type: "incident", ref: incidentId });
+          return ab.antibodyId;
+        },
+      });
+      return { incident: healed.incident };
+    } catch {
+      // Non-fatal — the incident is recorded; heal failure is logged by healIncident.
+    }
+  }
+
   return { incident };
 }
 
