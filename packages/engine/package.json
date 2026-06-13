@@ -12,7 +12,8 @@
     "scan": "tsx src/scripts/scan.ts",
     "antibodies:check": "tsx src/scripts/antibodies-check.ts",
     "intent:capture": "tsx src/genome/cli.ts",
-    "intent:pair": "tsx src/genome/pairCli.ts"
+    "intent:pair": "tsx src/genome/pairCli.ts",
+    "entropy:measure": "tsx src/metabolism/cli.ts"
   },
   "dependencies": {
     "@helix/ai": "workspace:*",

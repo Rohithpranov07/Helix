@@ -26,6 +26,8 @@ export { spinShadow, applyToShadow, replayTraffic } from "./shadow/runtime.js";
 export type { TrafficCase, TrafficReplay } from "./shadow/runtime.js";
 export { verifyEquivalence } from "./shadow/verify.js";
 export { captureIntent, seedShopLite, SHOPLITE_MODULES } from "./genome/capture.js";
+export { measureEntropy, computeTemperature, computeProjectedWeeks } from "./metabolism/temperature.js";
+export type { MeasureEntropyDeps } from "./metabolism/temperature.js";
 export {
   pairGenome,
   NOT_WIRED_VERIFY_CORRECTION,
@@ -213,13 +215,11 @@ export async function genomePair(req: GenomePairReq): Promise<GenomePairRes> {
   };
 }
 
-export async function entropyMeasure(_req: EntropyMeasureReq): Promise<EntropyMeasureRes> {
-  return {
-    point: {
-      ts: new Date().toISOString(),
-      temperature: 0,
-      dims: { duplication: 0, patternVariance: 0, coupling: 0, vulnDensity: 0, comprehension: 0 },
-      projectedRewriteWeeks: 0,
-    },
-  };
+export async function entropyMeasure(req: EntropyMeasureReq): Promise<EntropyMeasureRes> {
+  const { measureEntropy: _measureEntropy } = await import("./metabolism/temperature.js");
+  const { resolve } = await import("path");
+  const REPO_ROOT = resolve(__dirname, "../../..");
+  const repoPath = resolve(REPO_ROOT, req.repoPath);
+  const point = await _measureEntropy(repoPath);
+  return { point };
 }
