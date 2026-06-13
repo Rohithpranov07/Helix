@@ -23,6 +23,7 @@ export { spinShadow, applyToShadow, replayTraffic } from "./shadow/runtime.js";
 export type { TrafficCase, TrafficReplay } from "./shadow/runtime.js";
 export { verifyEquivalence } from "./shadow/verify.js";
 export { handleIncident } from "./nervous/incident.js";
+export { promoteToTarget } from "./immune/promote.js";
 
 // ── Reflex handlers ──────────────────────────────────────────────────────────
 
@@ -38,9 +39,11 @@ export async function vulnHeal(req: VulnHealReq): Promise<VulnHealRes> {
   const { applyInShadow } = await import("./immune/patch.js");
   const { applyToShadow } = await import("./shadow/runtime.js");
   const { verifyEquivalence } = await import("./shadow/verify.js");
+  const { promoteToTarget } = await import("./immune/promote.js");
   const { vulnerability, proof } = await healVulnerability(req.findingId, {
     applyShadow: (f, p) => applyInShadow(f, p, applyToShadow),
     verify: (changeRef) => verifyEquivalence(changeRef),
+    promote: (finding, patch) => promoteToTarget(finding, patch),
     mint: async (finding) => {
       const ab = await mintAntibody({ type: "vuln", ref: finding._id });
       return ab.antibodyId;
