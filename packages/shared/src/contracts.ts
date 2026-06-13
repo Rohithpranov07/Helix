@@ -124,6 +124,16 @@ export const IncidentHandleResSchema = z.object({ incident: IncidentSchema });
 export type IncidentHandleReq = z.infer<typeof IncidentHandleReqSchema>;
 export type IncidentHandleRes = z.infer<typeof IncidentHandleResSchema>;
 
+// incident.resolve
+export const IncidentResolveReqSchema = z.object({ incidentId: z.string().min(1) });
+export const IncidentResolveResSchema = z.object({
+  incident: IncidentSchema,
+  healed: z.array(z.string()),
+  skipped: z.array(z.string()),
+});
+export type IncidentResolveReq = z.infer<typeof IncidentResolveReqSchema>;
+export type IncidentResolveRes = z.infer<typeof IncidentResolveResSchema>;
+
 // genome.pair
 export const GenomePairReqSchema = z.object({ moduleId: z.string() });
 export const GenomePairResSchema = z.object({

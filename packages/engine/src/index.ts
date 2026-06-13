@@ -2,16 +2,12 @@ import type {
   ScanRunReq, ScanRunRes,
   VulnHealReq, VulnHealRes,
   IncidentHandleReq, IncidentHandleRes,
+  IncidentResolveReq, IncidentResolveRes,
   GenomePairReq, GenomePairRes,
   EntropyMeasureReq, EntropyMeasureRes,
 } from "@helix/shared";
 
-export interface IncidentResolveReq { incidentId: string; }
-export interface IncidentResolveRes {
-  incident: import("@helix/shared").Incident;
-  healed: string[];
-  skipped: string[];
-}
+export type { IncidentResolveReq, IncidentResolveRes } from "@helix/shared";
 
 export { scanTarget } from "./immune/scanner.js";
 export { confirmFinding } from "./immune/confirm.js";

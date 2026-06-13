@@ -32,6 +32,9 @@ Thumbs.db
 .vscode/
 .idea/
 
+# Shadow staging (runtime output from promote operations)
+shadow/staging/
+
 # Logs
 *.log
 npm-debug.log*
