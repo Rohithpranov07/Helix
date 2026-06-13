@@ -101,3 +101,35 @@ export interface Homeostasis {
   action: GovernorAction;
   hottestZones: string[];
 }
+
+// ----- Genome §3 extended: GitHub drift detection -----
+export type DriftStatus = "pending_approval" | "approved" | "rejected" | "pr_created";
+
+export interface DriftMismatch {
+  invariantId: string;
+  description: string;
+  affectedFile: string;
+  diff: string;          // unified diff for human review
+  newContent: string;    // full patched file content (written to shadow branch)
+}
+
+export interface DriftReport {
+  driftId: string;
+  strandId: string;
+  githubOwner: string;
+  githubRepo: string;
+  shadowBranch: string;
+  detectedAt: string;
+  mismatches: DriftMismatch[];
+  status: DriftStatus;
+  prUrl?: string;
+  prNumber?: number;
+}
+
+export interface GitHubConnection {
+  owner: string;
+  repo: string;
+  accessToken: string;
+  defaultBranch: string;
+  connectedAt: string;
+}

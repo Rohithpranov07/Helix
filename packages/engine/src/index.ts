@@ -6,9 +6,17 @@ import type {
   GenomePairReq, GenomePairRes,
   EntropyMeasureReq, EntropyMeasureRes,
   GovernorCheckReq, GovernorCheckRes,
+  GenomeIndexReq, GenomeIndexRes,
+  GenomeDriftReq, GenomeDriftRes,
+  GenomeApproveReq, GenomeApproveRes,
+  GenomeRejectReq, GenomeRejectRes,
 } from "@helix/shared";
 
 export type { IncidentResolveReq, IncidentResolveRes } from "@helix/shared";
+export type { DriftReport, GitHubConnection, DriftMismatch } from "@helix/shared";
+export { indexGitHubRepo } from "./genome/repoIndex.js";
+export { detectRepoDrift } from "./genome/repoDrift.js";
+export { approveDriftPatch, rejectDriftPatch } from "./genome/repoPatch.js";
 
 export { scanTarget } from "./immune/scanner.js";
 export { confirmFinding } from "./immune/confirm.js";
@@ -253,4 +261,52 @@ export async function entropyMeasure(req: EntropyMeasureReq): Promise<EntropyMea
   const repoPath = resolve(REPO_ROOT, req.repoPath);
   const point = await _measureEntropy(repoPath);
   return { point };
+}
+
+export async function genomeIndex(req: GenomeIndexReq): Promise<GenomeIndexRes> {
+  const { indexGitHubRepo: _index } = await import("./genome/repoIndex.js");
+  const { findGitHubConnection } = await import("@helix/db");
+  const conn = await findGitHubConnection(req.owner, req.repo);
+  if (!conn) {
+    throw new Error(
+      `No GitHub connection for ${req.owner}/${req.repo}. Authenticate via /api/auth/github first.`,
+    );
+  }
+  const strands = await _index({
+    token: conn.accessToken,
+    owner: req.owner,
+    repo: req.repo,
+    intentDocPaths: req.intentDocs,
+  });
+  return { strands, indexed: strands.length };
+}
+
+export async function genomeDrift(req: GenomeDriftReq): Promise<GenomeDriftRes> {
+  const { detectRepoDrift: _detect } = await import("./genome/repoDrift.js");
+  const { findGitHubConnection } = await import("@helix/db");
+  const conn = await findGitHubConnection(req.owner, req.repo);
+  if (!conn) {
+    throw new Error(
+      `No GitHub connection for ${req.owner}/${req.repo}. Authenticate via /api/auth/github first.`,
+    );
+  }
+  const report = await _detect({
+    token: conn.accessToken,
+    owner: req.owner,
+    repo: req.repo,
+    ...(req.moduleId !== undefined ? { moduleId: req.moduleId } : {}),
+  });
+  return { report };
+}
+
+export async function genomeApprove(req: GenomeApproveReq): Promise<GenomeApproveRes> {
+  const { approveDriftPatch: _approve } = await import("./genome/repoPatch.js");
+  const result = await _approve(req.driftId);
+  return { prUrl: result.prUrl, prNumber: result.prNumber, report: result.report };
+}
+
+export async function genomeReject(req: GenomeRejectReq): Promise<GenomeRejectRes> {
+  const { rejectDriftPatch: _reject } = await import("./genome/repoPatch.js");
+  const report = await _reject(req.driftId);
+  return { driftId: report.driftId, status: report.status };
 }

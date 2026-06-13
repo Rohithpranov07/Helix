@@ -63,3 +63,20 @@ export {
   updateHomeostasis,
   listHomeostasis,
 } from "./repos/homeostasis.js";
+
+export { GitHubConnectionModel } from "./models/githubConnection.js";
+export { DriftReportModel } from "./models/driftReport.js";
+
+export {
+  upsertGitHubConnection,
+  findGitHubConnection,
+  listGitHubConnections,
+  deleteGitHubConnection,
+} from "./repos/githubConnection.js";
+
+export {
+  createDriftReport,
+  findDriftReportByDriftId,
+  updateDriftReport,
+  listDriftReports,
+} from "./repos/driftReport.js";

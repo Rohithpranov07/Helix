@@ -164,6 +164,71 @@ export const GovernorCheckResSchema = z.object({
 export type GovernorCheckReq = z.infer<typeof GovernorCheckReqSchema>;
 export type GovernorCheckRes = z.infer<typeof GovernorCheckResSchema>;
 
+// genome.index  — index a GitHub repository into intent strands
+export const GenomeIndexReqSchema = z.object({
+  owner: z.string().min(1),
+  repo: z.string().min(1),
+  intentDocs: z.array(z.string()).default([]), // paths of PRD/spec files to use as intent
+});
+export const GenomeIndexResSchema = z.object({
+  strands: z.array(IntentStrandSchema),
+  indexed: z.number(),
+});
+export type GenomeIndexReq = z.infer<typeof GenomeIndexReqSchema>;
+export type GenomeIndexRes = z.infer<typeof GenomeIndexResSchema>;
+
+// genome.drift  — detect code-vs-intent drift across a GitHub repo
+export const GenomeDriftReqSchema = z.object({
+  owner: z.string().min(1),
+  repo: z.string().min(1),
+  moduleId: z.string().optional(), // if omitted, scan all indexed modules
+});
+
+const DriftMismatchSchema = z.object({
+  invariantId: z.string(),
+  description: z.string(),
+  affectedFile: z.string(),
+  diff: z.string(),
+  newContent: z.string(),
+});
+
+const DriftStatusSchema = z.enum(["pending_approval", "approved", "rejected", "pr_created"]);
+
+const DriftReportSchema = z.object({
+  driftId: z.string(),
+  strandId: z.string(),
+  githubOwner: z.string(),
+  githubRepo: z.string(),
+  shadowBranch: z.string(),
+  detectedAt: z.string(),
+  mismatches: z.array(DriftMismatchSchema),
+  status: DriftStatusSchema,
+  prUrl: z.string().optional(),
+  prNumber: z.number().optional(),
+});
+
+export const GenomeDriftResSchema = z.object({ report: DriftReportSchema });
+export type GenomeDriftReq = z.infer<typeof GenomeDriftReqSchema>;
+export type GenomeDriftRes = z.infer<typeof GenomeDriftResSchema>;
+
+// genome.approve  — human approves a drift report → commits patches → opens PR
+export const GenomeApproveReqSchema = z.object({ driftId: z.string().min(1) });
+export const GenomeApproveResSchema = z.object({
+  prUrl: z.string(),
+  prNumber: z.number(),
+  report: DriftReportSchema,
+});
+export type GenomeApproveReq = z.infer<typeof GenomeApproveReqSchema>;
+export type GenomeApproveRes = z.infer<typeof GenomeApproveResSchema>;
+
+// genome.reject  — human rejects a drift report
+export const GenomeRejectReqSchema = z.object({ driftId: z.string().min(1) });
+export const GenomeRejectResSchema = z.object({ driftId: z.string(), status: DriftStatusSchema });
+export type GenomeRejectReq = z.infer<typeof GenomeRejectReqSchema>;
+export type GenomeRejectRes = z.infer<typeof GenomeRejectResSchema>;
+
+export { DriftMismatchSchema, DriftReportSchema, DriftStatusSchema };
+
 // re-export sub-schemas for use in other packages
 export {
   VulnClassSchema,

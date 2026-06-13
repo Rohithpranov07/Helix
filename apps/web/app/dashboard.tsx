@@ -86,6 +86,34 @@ interface StreamEvent {
   detail?: string;
 }
 
+interface GitHubConnection {
+  owner: string;
+  repo: string;
+  defaultBranch: string;
+  connectedAt: string;
+}
+
+interface DriftMismatch {
+  invariantId: string;
+  description: string;
+  affectedFile: string;
+  diff: string;
+  newContent: string;
+}
+
+interface DriftReport {
+  driftId: string;
+  strandId: string;
+  githubOwner: string;
+  githubRepo: string;
+  shadowBranch: string;
+  detectedAt: string;
+  mismatches: DriftMismatch[];
+  status: "pending_approval" | "approved" | "rejected" | "pr_created";
+  prUrl?: string;
+  prNumber?: number;
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function tempColor(t: number): string {
@@ -267,6 +295,377 @@ function IncidentVoicePanel({ incidentId }: { incidentId: string }) {
         </div>
       )}
     </div>
+  );
+}
+
+// ── GitHub Genome Panel ────────────────────────────────────────────────────────
+
+function GenomePanel() {
+  const [connections, setConnections] = useState<GitHubConnection[]>([]);
+  const [drifts, setDrifts] = useState<DriftReport[]>([]);
+  const [owner, setOwner] = useState("");
+  const [repo, setRepo] = useState("");
+  const [intentDocs, setIntentDocs] = useState("");
+  const [selectedConn, setSelectedConn] = useState<string | null>(null); // "owner/repo"
+  const [indexing, setIndexing] = useState(false);
+  const [detecting, setDetecting] = useState(false);
+  const [indexResult, setIndexResult] = useState<string | null>(null);
+  const [acting, setActing] = useState<Set<string>>(new Set());
+  const [panelError, setPanelError] = useState<string | null>(null);
+  const [connError, setConnError] = useState<string | null>(null);
+
+  const loadConnections = useCallback(async () => {
+    try {
+      const res = await fetch("/api/github/connections");
+      const json = (await res.json()) as { connections?: GitHubConnection[]; error?: string };
+      if (json.connections) setConnections(json.connections);
+    } catch { /* ignore */ }
+  }, []);
+
+  const loadDrifts = useCallback(async (o: string, r: string) => {
+    try {
+      const res = await fetch(`/api/reflex/genome-drifts?owner=${encodeURIComponent(o)}&repo=${encodeURIComponent(r)}`);
+      const json = (await res.json()) as { reports?: DriftReport[] };
+      if (json.reports) setDrifts(json.reports);
+    } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => {
+    void loadConnections();
+    // Check URL for github_connected / error params
+    const params = new URLSearchParams(window.location.search);
+    const connected = params.get("github_connected");
+    if (connected) {
+      const parts = connected.split("/");
+      if (parts.length === 2) {
+        const [o, r] = parts as [string, string];
+        setOwner(o);
+        setRepo(r);
+        setSelectedConn(connected);
+        void loadDrifts(o, r);
+      }
+      // clean up URL
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+    const err = params.get("error");
+    if (err) {
+      setConnError(decodeURIComponent(err));
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, [loadConnections, loadDrifts]);
+
+  function connectOAuth() {
+    if (!owner.trim() || !repo.trim()) {
+      setPanelError("Enter owner and repo before connecting.");
+      return;
+    }
+    window.location.href = `/api/auth/github?owner=${encodeURIComponent(owner.trim())}&repo=${encodeURIComponent(repo.trim())}`;
+  }
+
+  async function selectRepo(conn: GitHubConnection) {
+    setSelectedConn(`${conn.owner}/${conn.repo}`);
+    setOwner(conn.owner);
+    setRepo(conn.repo);
+    setIndexResult(null);
+    setPanelError(null);
+    setDrifts([]);
+    await loadDrifts(conn.owner, conn.repo);
+  }
+
+  async function runIndex() {
+    if (!selectedConn) return;
+    setIndexing(true);
+    setPanelError(null);
+    setIndexResult(null);
+    try {
+      const docPaths = intentDocs.split(",").map((s) => s.trim()).filter(Boolean);
+      const res = await fetch("/api/reflex/genome-index", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ owner, repo, intentDocs: docPaths }),
+      });
+      const json = (await res.json()) as { indexed?: number; error?: string; message?: string };
+      if (!res.ok) throw new Error(json.message ?? json.error ?? `HTTP ${res.status}`);
+      setIndexResult(`Indexed ${json.indexed ?? 0} modules into intent strands.`);
+    } catch (e) {
+      setPanelError(e instanceof Error ? e.message : "indexing failed");
+    } finally {
+      setIndexing(false);
+    }
+  }
+
+  async function runDrift() {
+    if (!selectedConn) return;
+    setDetecting(true);
+    setPanelError(null);
+    try {
+      const res = await fetch("/api/reflex/genome-drift", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ owner, repo }),
+      });
+      const json = (await res.json()) as { report?: DriftReport; error?: string; message?: string };
+      if (!res.ok) throw new Error(json.message ?? json.error ?? `HTTP ${res.status}`);
+      if (json.report) {
+        setDrifts((prev) => {
+          const next = [json.report!, ...prev.filter((d) => d.driftId !== json.report!.driftId)];
+          return next;
+        });
+      }
+    } catch (e) {
+      setPanelError(e instanceof Error ? e.message : "drift detection failed");
+    } finally {
+      setDetecting(false);
+    }
+  }
+
+  async function approve(driftId: string) {
+    setActing((s) => new Set(s).add(driftId));
+    try {
+      const res = await fetch("/api/reflex/genome-approve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ driftId }),
+      });
+      const json = (await res.json()) as { prUrl?: string; prNumber?: number; report?: DriftReport; error?: string; message?: string };
+      if (!res.ok) throw new Error(json.message ?? json.error ?? `HTTP ${res.status}`);
+      if (json.report) {
+        setDrifts((prev) => prev.map((d) => d.driftId === driftId ? json.report! : d));
+      }
+    } catch (e) {
+      setPanelError(e instanceof Error ? e.message : "approve failed");
+    } finally {
+      setActing((s) => { const n = new Set(s); n.delete(driftId); return n; });
+    }
+  }
+
+  async function reject(driftId: string) {
+    setActing((s) => new Set(s).add(driftId));
+    try {
+      const res = await fetch("/api/reflex/genome-reject", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ driftId }),
+      });
+      const json = (await res.json()) as { driftId?: string; status?: string; error?: string; message?: string };
+      if (!res.ok) throw new Error(json.message ?? json.error ?? `HTTP ${res.status}`);
+      setDrifts((prev) => prev.map((d) => d.driftId === driftId ? { ...d, status: "rejected" as const } : d));
+    } catch (e) {
+      setPanelError(e instanceof Error ? e.message : "reject failed");
+    } finally {
+      setActing((s) => { const n = new Set(s); n.delete(driftId); return n; });
+    }
+  }
+
+  const inputStyle: React.CSSProperties = {
+    background: "#0f172a", border: "1px solid #334155", borderRadius: 6,
+    color: "#e2e8f0", padding: "6px 10px", fontSize: 13, outline: "none",
+    width: "100%", boxSizing: "border-box",
+  };
+  const btnPrimary: React.CSSProperties = {
+    background: "#1e40af", border: "none", borderRadius: 6, color: "#e2e8f0",
+    padding: "7px 16px", fontSize: 13, cursor: "pointer", fontWeight: 600,
+  };
+  const btnSecondary: React.CSSProperties = {
+    background: "#1e293b", border: "1px solid #334155", borderRadius: 6,
+    color: "#94a3b8", padding: "6px 12px", fontSize: 12, cursor: "pointer",
+  };
+  const btnDanger: React.CSSProperties = {
+    background: "#450a0a", border: "1px solid #7f1d1d", borderRadius: 6,
+    color: "#fca5a5", padding: "5px 10px", fontSize: 12, cursor: "pointer",
+  };
+  const btnSuccess: React.CSSProperties = {
+    background: "#052e16", border: "1px solid #14532d", borderRadius: 6,
+    color: "#86efac", padding: "5px 10px", fontSize: 12, cursor: "pointer",
+  };
+
+  const statusColor = (s: string) => {
+    if (s === "pending_approval") return "#f97316";
+    if (s === "approved" || s === "pr_created") return "#22c55e";
+    if (s === "rejected") return "#ef4444";
+    return "#94a3b8";
+  };
+
+  return (
+    <Card title="Genome — GitHub Repository Monitor">
+      {connError && (
+        <div style={{ background: "#450a0a", borderRadius: 6, padding: "8px 12px", color: "#fca5a5", fontSize: 13, marginBottom: 12 }}>
+          OAuth error: {connError}
+        </div>
+      )}
+
+      {/* Connect Form */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr auto", gap: 8, alignItems: "end", marginBottom: 16 }}>
+        <div>
+          <div style={{ fontSize: 11, color: "#64748b", marginBottom: 4 }}>GitHub Owner</div>
+          <input style={inputStyle} value={owner} onChange={(e) => setOwner(e.target.value)} placeholder="octocat" />
+        </div>
+        <div>
+          <div style={{ fontSize: 11, color: "#64748b", marginBottom: 4 }}>Repository</div>
+          <input style={inputStyle} value={repo} onChange={(e) => setRepo(e.target.value)} placeholder="my-repo" />
+        </div>
+        <div>
+          <div style={{ fontSize: 11, color: "#64748b", marginBottom: 4 }}>Intent doc paths (comma-sep)</div>
+          <input style={inputStyle} value={intentDocs} onChange={(e) => setIntentDocs(e.target.value)} placeholder="docs/PRD.md,ARCHITECTURE.md" />
+        </div>
+        <button style={btnPrimary} onClick={connectOAuth}>Connect via GitHub</button>
+      </div>
+
+      {/* Connected repos */}
+      {connections.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 11, color: "#64748b", marginBottom: 8 }}>Connected repositories</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {connections.map((c) => {
+              const key = `${c.owner}/${c.repo}`;
+              const isSelected = selectedConn === key;
+              return (
+                <button
+                  key={key}
+                  style={{
+                    ...btnSecondary,
+                    border: isSelected ? "1px solid #3b82f6" : "1px solid #334155",
+                    color: isSelected ? "#93c5fd" : "#94a3b8",
+                  }}
+                  onClick={() => { void selectRepo(c); }}
+                >
+                  {key}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Actions for selected repo */}
+      {selectedConn && (
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 11, color: "#64748b", marginBottom: 8 }}>
+            Active: <span style={{ color: "#3b82f6", fontFamily: "monospace" }}>{selectedConn}</span>
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button style={btnSecondary} onClick={() => { void runIndex(); }} disabled={indexing}>
+              {indexing ? "Indexing…" : "Index Repository"}
+            </button>
+            <button style={btnSecondary} onClick={() => { void runDrift(); }} disabled={detecting}>
+              {detecting ? "Detecting…" : "Detect Drift"}
+            </button>
+            <button style={btnSecondary} onClick={() => { void loadDrifts(owner, repo); }}>
+              Refresh Drift Reports
+            </button>
+          </div>
+          {indexResult && (
+            <div style={{ marginTop: 8, fontSize: 12, color: "#86efac", background: "#052e16", borderRadius: 6, padding: "6px 10px" }}>
+              {indexResult}
+            </div>
+          )}
+        </div>
+      )}
+
+      {panelError && (
+        <div style={{ background: "#450a0a", borderRadius: 6, padding: "8px 12px", color: "#fca5a5", fontSize: 13, marginBottom: 12 }}>
+          {panelError}
+        </div>
+      )}
+
+      {/* Drift Reports */}
+      {drifts.length > 0 && (
+        <div>
+          <div style={{ fontSize: 11, color: "#64748b", marginBottom: 8 }}>
+            Drift reports — {drifts.filter((d) => d.status === "pending_approval").length} pending approval
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {drifts.map((d) => (
+              <div key={d.driftId} style={{
+                background: "#1e293b", borderRadius: 8, padding: "12px 16px",
+                borderLeft: `3px solid ${statusColor(d.status)}`,
+              }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 8 }}>
+                  <div>
+                    <div style={{ fontSize: 12, fontFamily: "monospace", color: "#94a3b8" }}>
+                      {d.driftId}
+                    </div>
+                    <div style={{ fontSize: 11, color: "#475569", marginTop: 2 }}>
+                      detected {fmtAgo(d.detectedAt)} · shadow branch:{" "}
+                      <span style={{ fontFamily: "monospace", color: "#64748b" }}>{d.shadowBranch}</span>
+                    </div>
+                    <div style={{ fontSize: 12, color: "#cbd5e1", marginTop: 4 }}>
+                      {d.mismatches.length} mismatch{d.mismatches.length !== 1 ? "es" : ""}:{" "}
+                      {d.mismatches.map((m) => m.invariantId).join(", ")}
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{
+                      fontSize: 10, fontWeight: 700, letterSpacing: "0.06em",
+                      color: statusColor(d.status),
+                      padding: "2px 8px", borderRadius: 4,
+                      background: `${statusColor(d.status)}18`,
+                    }}>
+                      {d.status.replace("_", " ").toUpperCase()}
+                    </span>
+                    {d.status === "pending_approval" && (
+                      <>
+                        <button
+                          style={btnSuccess}
+                          disabled={acting.has(d.driftId)}
+                          onClick={() => { void approve(d.driftId); }}
+                        >
+                          {acting.has(d.driftId) ? "…" : "Approve & Create PR"}
+                        </button>
+                        <button
+                          style={btnDanger}
+                          disabled={acting.has(d.driftId)}
+                          onClick={() => { void reject(d.driftId); }}
+                        >
+                          Reject
+                        </button>
+                      </>
+                    )}
+                    {d.status === "pr_created" && d.prUrl && (
+                      <a
+                        href={d.prUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ ...btnSuccess, textDecoration: "none", fontSize: 12 }}
+                      >
+                        View PR #{d.prNumber}
+                      </a>
+                    )}
+                  </div>
+                </div>
+                {/* Mismatch details */}
+                {d.mismatches.length > 0 && (
+                  <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6 }}>
+                    {d.mismatches.map((m) => (
+                      <div key={m.invariantId} style={{
+                        background: "#0f172a", borderRadius: 6, padding: "8px 12px",
+                        fontSize: 11, color: "#94a3b8",
+                      }}>
+                        <span style={{ color: "#f97316", fontFamily: "monospace" }}>[{m.invariantId}]</span>{" "}
+                        {m.description}{" "}
+                        <span style={{ color: "#475569" }}>→ {m.affectedFile}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {selectedConn && drifts.length === 0 && (
+        <div style={{ color: "#475569", fontSize: 13 }}>
+          No drift reports for {selectedConn}. Index the repo then run "Detect Drift".
+        </div>
+      )}
+
+      {!selectedConn && connections.length === 0 && (
+        <div style={{ color: "#475569", fontSize: 13 }}>
+          Enter owner + repo above and click "Connect via GitHub" to authenticate HELIX with your repository.
+        </div>
+      )}
+    </Card>
   );
 }
 
@@ -695,6 +1094,9 @@ export default function Dashboard() {
               )}
             </Card>
           </div>
+
+          {/* GitHub Genome */}
+          <GenomePanel />
 
           {/* Activity Stream */}
           <Card title="Activity Stream — Reflex Arcs (live)">
