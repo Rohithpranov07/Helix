@@ -11,7 +11,8 @@
     "test": "vitest run",
     "scan": "tsx src/scripts/scan.ts",
     "antibodies:check": "tsx src/scripts/antibodies-check.ts",
-    "intent:capture": "tsx src/genome/cli.ts"
+    "intent:capture": "tsx src/genome/cli.ts",
+    "intent:pair": "tsx src/genome/pairCli.ts"
   },
   "dependencies": {
     "@helix/ai": "workspace:*",
