@@ -1,22 +1,18 @@
-/**
- * GET /api/auth/github/callback?code=<code>&state=<state>
- * GitHub OAuth callback. Exchanges code → token, fetches repo info,
- * persists GitHubConnection to MongoDB, redirects to dashboard.
- *
- * Required env: GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET
- */
 import { NextResponse } from "next/server";
 import { connectDb, upsertGitHubConnection } from "@helix/db";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
+  const url = new URL(request.url);
+  const origin = url.origin; // e.g. http://localhost:3000
+
+  const { searchParams } = url;
   const code = searchParams.get("code");
   const stateB64 = searchParams.get("state") ?? "";
 
   if (!code) {
-    return NextResponse.redirect("/?error=github_oauth_cancelled");
+    return NextResponse.redirect(`${origin}/?error=github_oauth_cancelled`);
   }
 
   const clientId = process.env["GITHUB_CLIENT_ID"];
@@ -40,38 +36,40 @@ export async function GET(request: Request) {
     owner = state.owner ?? "";
     repo = state.repo ?? "";
   } catch {
-    return NextResponse.redirect("/?error=invalid_oauth_state");
+    return NextResponse.redirect(`${origin}/?error=invalid_oauth_state`);
   }
 
   try {
-    // Exchange code for access token
     const { exchangeCode, getRepo, getAuthenticatedUser } = await import(
       "@helix/engine/src/genome/github.js"
     );
     const token = await exchangeCode(clientId, clientSecret, code);
 
-    // Get authenticated user (validates token)
+    // Get authenticated user (validates token + provides login for owner fallback)
     const user = await getAuthenticatedUser(token);
     const effectiveOwner = owner || user.login;
+    const effectiveRepo = repo || effectiveOwner;
 
     // Get repo info (default branch)
-    const repoInfo = await getRepo(token, effectiveOwner, repo || effectiveOwner);
+    const repoInfo = await getRepo(token, effectiveOwner, effectiveRepo);
 
     // Persist connection
     await connectDb();
     await upsertGitHubConnection({
       owner: effectiveOwner,
-      repo: repo || effectiveOwner,
+      repo: effectiveRepo,
       accessToken: token,
       defaultBranch: repoInfo.default_branch,
       connectedAt: new Date().toISOString(),
     });
 
     return NextResponse.redirect(
-      `/?github_connected=${encodeURIComponent(`${effectiveOwner}/${repo || effectiveOwner}`)}`,
+      `${origin}/?github_connected=${encodeURIComponent(`${effectiveOwner}/${effectiveRepo}`)}`,
     );
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    return NextResponse.redirect(`/?error=${encodeURIComponent(msg.slice(0, 200))}`);
+    return NextResponse.redirect(
+      `${origin}/?error=${encodeURIComponent(msg.slice(0, 200))}`,
+    );
   }
 }
