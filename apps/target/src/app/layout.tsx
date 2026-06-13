@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { AdminBanner } from "./_components/AdminBanner";
 
 export const metadata: Metadata = {
   title: "ShopLite",
@@ -10,7 +11,10 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <AdminBanner />
+        {children}
+      </body>
     </html>
   );
 }

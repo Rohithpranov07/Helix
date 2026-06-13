@@ -11,6 +11,7 @@
     "clean": "rm -rf .next"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.108.1",
     "next": "15.3.9",
     "react": "19.2.7",
     "react-dom": "19.2.7"

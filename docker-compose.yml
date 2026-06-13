@@ -1,5 +1,3 @@
-version: "3.8"
-
 # Helix local dev stack
 # Start all: docker compose up -d
 # n8n UI: http://localhost:5678

@@ -1,0 +1,26 @@
+[
+  {
+    "class": "SQLi",
+    "endpoint": "/api/products/search",
+    "file": "src/app/api/products/search/route.ts",
+    "expectedDetection": "Raw string concatenation into SQL query passed to unsafe_search RPC. Payload: ?q=' OR '1'='1"
+  },
+  {
+    "class": "XSS",
+    "endpoint": "/search",
+    "file": "src/app/search/page.tsx",
+    "expectedDetection": "dangerouslySetInnerHTML with unsanitised ?q= param and product.name reflected in DOM. Payload: ?q=<script>alert(1)</script>"
+  },
+  {
+    "class": "missingRLS",
+    "endpoint": "/admin/orders",
+    "file": "src/app/admin/orders/page.tsx",
+    "expectedDetection": "Supabase orders table has no RLS policy. Any authenticated user can SELECT * FROM orders and read all users' order data."
+  },
+  {
+    "class": "secretLeak",
+    "endpoint": "/",
+    "file": "src/lib/adminClient.ts",
+    "expectedDetection": "Supabase service-role key hard-coded in a 'use client' module, bundled into client-side JavaScript and exposed in browser."
+  }
+]
