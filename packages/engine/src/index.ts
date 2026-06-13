@@ -50,6 +50,23 @@ export { healIncident, synthesizeIncidentPatch } from "./nervous/heal.js";
 export type { HealIncidentDeps, HealIncidentResult, HealIncidentEvent, HealIncidentOutcome, IncidentSynthResult } from "./nervous/heal.js";
 export { promoteToTarget } from "./immune/promote.js";
 
+// ── Repo root resolution ─────────────────────────────────────────────────────
+// __dirname is unreliable in Next.js bundled context (webpack replaces it with
+// the output directory). Walk up from process.cwd() to find the monorepo root.
+function findRepoRoot(): string {
+  const { existsSync } = require("fs") as typeof import("fs");
+  const { resolve } = require("path") as typeof import("path");
+  let d: string = process.cwd();
+  for (let i = 0; i < 8; i++) {
+    if (existsSync(resolve(d, "pnpm-workspace.yaml"))) return d;
+    const parent = resolve(d, "..");
+    if (parent === d) break;
+    d = parent;
+  }
+  // fallback: original __dirname-based path (works in non-bundled contexts)
+  return resolve(__dirname, "../../..");
+}
+
 // ── Reflex handlers ──────────────────────────────────────────────────────────
 
 export async function scanRun(req: ScanRunReq): Promise<ScanRunRes> {
@@ -93,7 +110,7 @@ export async function incidentHandle(req: IncidentHandleReq): Promise<IncidentHa
   // Auto-heal when Sarvam recommended rollback — full autonomous cure loop.
   if (incident.rollbackAt) {
     try {
-      const REPO_ROOT = resolve(__dirname, "../../..");
+      const REPO_ROOT = findRepoRoot();
       const healed = await _healIncident(incident, {
         applyShadow: (patch) => applyToShadow(patch),
         verify: (changeRef) => verifyEquivalence(changeRef),
@@ -165,7 +182,7 @@ export async function genomePair(req: GenomePairReq): Promise<GenomePairRes> {
   const { writeFileSync, mkdirSync } = await import("fs");
   const { resolve } = await import("path");
 
-  const REPO_ROOT = resolve(__dirname, "../../..");
+  const REPO_ROOT = findRepoRoot();
   const SHADOW_STAGING = resolve(REPO_ROOT, "shadow/staging");
 
   const result = await _pairGenome(req.moduleId, {
@@ -232,7 +249,7 @@ export async function governorCheck(req: GovernorCheckReq): Promise<GovernorChec
 export async function entropyMeasure(req: EntropyMeasureReq): Promise<EntropyMeasureRes> {
   const { measureEntropy: _measureEntropy } = await import("./metabolism/temperature.js");
   const { resolve } = await import("path");
-  const REPO_ROOT = resolve(__dirname, "../../..");
+  const REPO_ROOT = findRepoRoot();
   const repoPath = resolve(REPO_ROOT, req.repoPath);
   const point = await _measureEntropy(repoPath);
   return { point };

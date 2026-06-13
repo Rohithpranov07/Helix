@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 
 // ── Types mirroring /api/vitals response ──────────────────────────────────────
 
@@ -54,6 +54,19 @@ interface MemorySnapshot {
   recurrencesBlocked: number;
 }
 
+interface GenomeSnapshot {
+  modules: number;
+  paired: number;
+  avgScore: number | null;
+  totalUnpaired: number;
+  pairingPct: number | null;
+}
+
+interface HeartRateSnapshot {
+  incidentsPerDay: number;
+  deploysPerDay: number;
+}
+
 interface VitalsSnapshot {
   ts: string;
   governor: GovernorSnapshot | null;
@@ -62,6 +75,15 @@ interface VitalsSnapshot {
   immune: ImmuneSnapshot;
   nervous: NervousSnapshot;
   memory: MemorySnapshot;
+  genome: GenomeSnapshot;
+  heartRate: HeartRateSnapshot;
+}
+
+interface StreamEvent {
+  type: string;
+  ts: string;
+  message: string;
+  detail?: string;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -255,6 +277,8 @@ export default function Dashboard() {
   const [error, setError] = useState<string | null>(null);
   const [lastFetch, setLastFetch] = useState<Date | null>(null);
   const [fetching, setFetching] = useState(false);
+  const [activity, setActivity] = useState<StreamEvent[]>([]);
+  const activityRef = useRef<HTMLDivElement>(null);
 
   const fetchVitals = useCallback(async () => {
     setFetching(true);
@@ -278,11 +302,32 @@ export default function Dashboard() {
     return () => clearInterval(timer);
   }, [fetchVitals]);
 
+  // SSE activity stream
+  useEffect(() => {
+    const es = new EventSource("/api/stream");
+    es.onmessage = (ev) => {
+      try {
+        const data = JSON.parse(ev.data as string) as StreamEvent;
+        if (data.type === "heartbeat") return;
+        setActivity((prev) => {
+          const next = [data, ...prev].slice(0, 40);
+          return next;
+        });
+        // auto-scroll to top (newest first)
+        if (activityRef.current) activityRef.current.scrollTop = 0;
+      } catch { /* ignore */ }
+    };
+    es.onerror = () => { /* reconnects automatically */ };
+    return () => { es.close(); };
+  }, []);
+
   const g = snapshot?.governor;
   const e = snapshot?.entropy;
   const im = snapshot?.immune;
   const nv = snapshot?.nervous;
   const mem = snapshot?.memory;
+  const gen = snapshot?.genome;
+  const hr = snapshot?.heartRate;
 
   return (
     <div style={{
@@ -521,8 +566,181 @@ export default function Dashboard() {
             </Card>
           </div>
 
+          {/* Genetic Integrity + Heart Rate + Lifeline */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 20 }}>
+
+            <Card title="Genome — Genetic Integrity">
+              {gen ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                  <div style={{ display: "flex", alignItems: "flex-end", gap: 8 }}>
+                    <div style={{
+                      fontSize: 48, fontWeight: 800, lineHeight: 1,
+                      color: gen.pairingPct == null ? "#475569"
+                        : gen.pairingPct >= 80 ? "#22c55e"
+                        : gen.pairingPct >= 50 ? "#f97316" : "#ef4444",
+                    }}>
+                      {gen.pairingPct != null ? `${gen.pairingPct}%` : "—"}
+                    </div>
+                    <div style={{ fontSize: 12, color: "#64748b", paddingBottom: 6 }}>paired</div>
+                  </div>
+                  <MiniBar
+                    value={gen.pairingPct ?? 0}
+                    max={100}
+                    color={
+                      (gen.pairingPct ?? 0) >= 80 ? "#22c55e"
+                      : (gen.pairingPct ?? 0) >= 50 ? "#f97316" : "#ef4444"
+                    }
+                  />
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", color: "#94a3b8" }}>
+                      <span>modules tracked</span><span style={{ color: "#e2e8f0" }}>{gen.modules}</span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", color: "#94a3b8" }}>
+                      <span>avg pairing score</span>
+                      <span style={{ color: "#e2e8f0" }}>{gen.avgScore != null ? gen.avgScore.toFixed(2) : "—"}</span>
+                    </div>
+                    {gen.totalUnpaired > 0 && (
+                      <div style={{ display: "flex", justifyContent: "space-between", color: "#f97316" }}>
+                        <span>unpaired invariants</span><span>{gen.totalUnpaired}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div style={{ color: "#475569", fontSize: 13 }}>
+                  no intent strands — run{" "}
+                  <code style={{ fontFamily: "monospace", fontSize: 11, color: "#64748b" }}>
+                    pnpm --filter engine seed:shoplite
+                  </code>
+                </div>
+              )}
+            </Card>
+
+            <Card title="Heart Rate — Deploy Velocity">
+              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                <div style={{ display: "flex", gap: 20 }}>
+                  <div>
+                    <div style={{ fontSize: 40, fontWeight: 800, color: "#38bdf8" }}>
+                      {hr?.deploysPerDay ?? "—"}
+                    </div>
+                    <div style={{ fontSize: 12, color: "#64748b" }}>deploys / day</div>
+                  </div>
+                  <div>
+                    <div style={{
+                      fontSize: 40, fontWeight: 800,
+                      color: (hr?.incidentsPerDay ?? 0) > 0 ? "#f97316" : "#22c55e",
+                    }}>
+                      {hr?.incidentsPerDay ?? "—"}
+                    </div>
+                    <div style={{ fontSize: 12, color: "#64748b" }}>incidents / day</div>
+                  </div>
+                </div>
+                <div style={{ fontSize: 12, color: "#475569" }}>
+                  {nv && nv.total > 0
+                    ? `${nv.resolved}/${nv.total} incidents resolved all-time`
+                    : "no incidents recorded"}
+                </div>
+                {nv && nv.total > 0 && (
+                  <div>
+                    <MiniBar
+                      value={nv.resolved}
+                      max={nv.total}
+                      color="#22c55e"
+                    />
+                    <div style={{ fontSize: 11, color: "#475569", marginTop: 3 }}>
+                      {Math.round((nv.resolved / nv.total) * 100)}% resolution rate
+                    </div>
+                  </div>
+                )}
+              </div>
+            </Card>
+
+            <Card title="Lifeline — Health Projection">
+              {e ? (() => {
+                const weeks = e.projectedRewriteWeeks;
+                const isGreen = weeks >= 20;
+                const isYellow = weeks >= 10 && weeks < 20;
+                const color = isGreen ? "#22c55e" : isYellow ? "#eab308" : "#ef4444";
+                const label = isGreen ? "THRIVING" : isYellow ? "WATCH" : "CRITICAL";
+                const pct = Math.min(100, (weeks / 52) * 100);
+                return (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                    <div style={{
+                      padding: "8px 16px", borderRadius: 8, textAlign: "center",
+                      background: `${color}18`, border: `2px solid ${color}`,
+                      fontSize: 20, fontWeight: 800, letterSpacing: "0.08em", color,
+                    }}>
+                      {label}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 32, fontWeight: 700, color }}>
+                        {weeks}
+                        <span style={{ fontSize: 14, fontWeight: 400, color: "#64748b", marginLeft: 4 }}>weeks</span>
+                      </div>
+                      <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>to rewrite threshold</div>
+                    </div>
+                    <div>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#475569", marginBottom: 4 }}>
+                        <span>rewrite now</span><span>52w runway</span>
+                      </div>
+                      <MiniBar value={pct} max={100} color={color} />
+                    </div>
+                    <div style={{ fontSize: 11, color: "#475569" }}>
+                      temp {e.temperature.toFixed(3)} · measured {fmtAgo(e.ts)}
+                    </div>
+                  </div>
+                );
+              })() : (
+                <div style={{ color: "#475569" }}>run entropy:measure to see projection</div>
+              )}
+            </Card>
+          </div>
+
+          {/* Activity Stream */}
+          <Card title="Activity Stream — Reflex Arcs (live)">
+            <div
+              ref={activityRef}
+              style={{
+                maxHeight: 280, overflowY: "auto",
+                display: "flex", flexDirection: "column", gap: 4,
+              }}
+            >
+              {activity.length === 0 ? (
+                <div style={{ color: "#334155", fontSize: 12, padding: "8px 0" }}>
+                  Waiting for events… (reflex arcs will appear here in real time)
+                </div>
+              ) : activity.map((ev, i) => (
+                <div key={i} style={{
+                  display: "flex", gap: 12, padding: "5px 8px",
+                  background: "#0f172a", borderRadius: 4,
+                  borderLeft: `3px solid ${
+                    ev.type === "vuln_detected" ? "#ef4444"
+                    : ev.type === "vuln_healed" ? "#22c55e"
+                    : ev.type === "incident_open" ? "#f97316"
+                    : ev.type === "incident_resolved" ? "#22c55e"
+                    : ev.type === "antibody_minted" ? "#818cf8"
+                    : ev.type === "entropy_measured" ? "#38bdf8"
+                    : "#334155"
+                  }`,
+                }}>
+                  <div style={{ fontSize: 10, color: "#475569", whiteSpace: "nowrap", paddingTop: 2 }}>
+                    {new Date(ev.ts).toLocaleTimeString()}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 12, color: "#cbd5e1" }}>{ev.message}</div>
+                    {ev.detail && (
+                      <div style={{ fontSize: 10, color: "#475569", fontFamily: "monospace", marginTop: 2 }}>
+                        {ev.detail}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+
           <div style={{ textAlign: "center", fontSize: 11, color: "#334155", paddingBottom: 8 }}>
-            HELIX autonomous living layer · auto-refreshes every 30s
+            HELIX autonomous living layer · auto-refreshes every 30s · activity stream live
             {snapshot.ts && ` · snapshot at ${new Date(snapshot.ts).toLocaleTimeString()}`}
           </div>
         </div>
