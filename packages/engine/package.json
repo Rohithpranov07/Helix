@@ -9,7 +9,8 @@
     "lint": "eslint src --max-warnings 0",
     "clean": "rm -rf dist",
     "test": "vitest run",
-    "scan": "tsx src/scripts/scan.ts"
+    "scan": "tsx src/scripts/scan.ts",
+    "antibodies:check": "tsx src/scripts/antibodies-check.ts"
   },
   "dependencies": {
     "@helix/ai": "workspace:*",

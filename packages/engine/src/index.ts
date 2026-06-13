@@ -15,6 +15,10 @@ export type {
   HealDeps, HealResult, HealRecord, HealOutcome,
   ReAttacker, ReAttackResult, EquivalenceVerifier, AntibodyMinter, Promoter, ShadowApply,
 } from "./immune/heal.js";
+export { mintAntibody, makeAntibodyId, makeSignature } from "./memory/mint.js";
+export type { MintSource } from "./memory/mint.js";
+export { matchAntibody, blockRecurrence } from "./memory/recall.js";
+export type { AntibodyMatch, RecurrenceReport } from "./memory/recall.js";
 
 // ── Reflex handlers ──────────────────────────────────────────────────────────
 
@@ -26,7 +30,13 @@ export async function scanRun(req: ScanRunReq): Promise<ScanRunRes> {
 
 export async function vulnHeal(req: VulnHealReq): Promise<VulnHealRes> {
   const { healVulnerability } = await import("./immune/heal.js");
-  const { vulnerability, proof } = await healVulnerability(req.findingId);
+  const { mintAntibody } = await import("./memory/mint.js");
+  const { vulnerability, proof } = await healVulnerability(req.findingId, {
+    mint: async (finding) => {
+      const ab = await mintAntibody({ type: "vuln", ref: finding._id });
+      return ab.antibodyId;
+    },
+  });
   return proof ? { vulnerability, proof } : { vulnerability };
 }
 
