@@ -52,9 +52,8 @@ const InvariantOutputSchema = z.object({
 
 const IntentStrandOutputSchema = z.object({
   purpose: z.string(),
-  invariants: z.array(InvariantOutputSchema).min(1),
-  edgeDecisions: z.array(z.string()),
-  sourcePrompt: z.string(),
+  invariants: z.array(InvariantOutputSchema).default([]),
+  edgeDecisions: z.array(z.string()).default([]),
 });
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -126,6 +125,7 @@ export async function indexGitHubRepo(
   const strands: IntentStrand[] = [];
 
   for (const [modName, filePaths] of moduleMap) {
+    try {
     // Skip modules with no meaningful files
     const selected = filePaths.slice(0, MAX_FILES_PER_MODULE);
 
@@ -167,11 +167,11 @@ export async function indexGitHubRepo(
         {
           role: "system",
           content:
-            "You are HELIX Genome. Extract a structured intent strand from the provided code module. " +
-            "Output ONLY valid JSON matching the schema exactly. " +
-            "invariants must capture every critical business rule, security requirement, " +
-            "and compliance constraint visible in the code or intent documents. " +
-            "Mark invariants with compliance:true when they relate to regulatory or approval requirements.",
+            "You are HELIX Genome. Extract a structured intent strand from the provided code module.\n" +
+            "Output ONLY valid JSON with EXACTLY these fields, no others:\n" +
+            '{"purpose":"string","invariants":[{"id":"string","rule":"string","rationale":"string"}],"edgeDecisions":["string"]}\n' +
+            "invariants must capture every critical business rule and security constraint visible in the code.\n" +
+            "If no invariants are found, output an empty array. Do NOT add any extra fields.",
         },
         {
           role: "user",
@@ -215,6 +215,10 @@ export async function indexGitHubRepo(
       await createIntentStrand(strandDoc);
     }
     strands.push(strandDoc);
+    } catch (modErr) {
+      // Log but don't abort — one bad module shouldn't kill the full index run
+      console.warn(`[genome/index] skipping module ${modName}:`, modErr instanceof Error ? modErr.message : modErr);
+    }
   }
 
   return strands;

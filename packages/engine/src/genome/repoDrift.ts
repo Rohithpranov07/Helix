@@ -123,6 +123,7 @@ export async function detectRepoDrift(
   let worstScore = 1.0;
 
   for (const strand of strands) {
+    try {
     const modName = strand.moduleId.split("/").pop() ?? strand.moduleId;
     const files = moduleFiles.get(modName) ?? [];
 
@@ -170,9 +171,9 @@ export async function detectRepoDrift(
         {
           role: "system",
           content:
-            "You are HELIX Genome. Analyze code-vs-intent drift and output structured JSON. " +
-            "Be precise: only flag real violations, not style preferences. " +
-            "pairingScore is 0.0 (fully drifted) to 1.0 (fully paired).",
+            "You are HELIX Genome. Analyze code-vs-intent drift and output ONLY valid JSON.\n" +
+            "Output EXACTLY: {\"pairingScore\":0.0-1.0,\"unpairedInvariants\":[\"id\"],\"mismatches\":[{\"invariantId\":\"id\",\"description\":\"what is wrong\",\"affectedFile\":\"path/to/file.ts\",\"severity\":\"high\"}],\"summary\":\"one sentence\"}\n" +
+            "pairingScore: 1.0 = fully paired, 0.0 = fully drifted. Only flag REAL violations, not style. Use empty arrays if nothing found.",
         },
         {
           role: "user",
@@ -209,10 +210,9 @@ export async function detectRepoDrift(
           {
             role: "system",
             content:
-              "You are HELIX Genome. Generate a minimal, safe patch to fix a code-intent drift. " +
-              "Output JSON with: diff (unified diff format), newContent (full file after fix), rationale. " +
-              "The fix must restore the invariant without changing any other behaviour. " +
-              "newContent must be the complete corrected file.",
+              "You are HELIX Genome. Generate a minimal patch to fix a code-intent drift.\n" +
+              "Output ONLY valid JSON with EXACTLY: {\"diff\":\"unified diff string\",\"newContent\":\"complete corrected file content\",\"rationale\":\"one sentence\"}\n" +
+              "The fix must restore the invariant without changing any other behavior.",
           },
           {
             role: "user",
@@ -236,6 +236,9 @@ export async function detectRepoDrift(
         diff: patch.diff,
         newContent: patch.newContent,
       });
+    }
+    } catch (modErr) {
+      console.warn(`[genome/drift] skipping module ${strand.moduleId}:`, modErr instanceof Error ? modErr.message : modErr);
     }
   }
 

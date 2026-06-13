@@ -265,7 +265,8 @@ export async function entropyMeasure(req: EntropyMeasureReq): Promise<EntropyMea
 
 export async function genomeIndex(req: GenomeIndexReq): Promise<GenomeIndexRes> {
   const { indexGitHubRepo: _index } = await import("./genome/repoIndex.js");
-  const { findGitHubConnection } = await import("@helix/db");
+  const { connectDb, findGitHubConnection } = await import("@helix/db");
+  await connectDb();
   const conn = await findGitHubConnection(req.owner, req.repo);
   if (!conn) {
     throw new Error(
@@ -283,7 +284,8 @@ export async function genomeIndex(req: GenomeIndexReq): Promise<GenomeIndexRes> 
 
 export async function genomeDrift(req: GenomeDriftReq): Promise<GenomeDriftRes> {
   const { detectRepoDrift: _detect } = await import("./genome/repoDrift.js");
-  const { findGitHubConnection } = await import("@helix/db");
+  const { connectDb, findGitHubConnection } = await import("@helix/db");
+  await connectDb();
   const conn = await findGitHubConnection(req.owner, req.repo);
   if (!conn) {
     throw new Error(
