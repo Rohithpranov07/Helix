@@ -1,0 +1,35 @@
+# HELIX Shadow Twin — ShopLite on port 3002.
+#
+# Managed programmatically by packages/engine/src/shadow/runtime.ts (spinShadow).
+# You can also start it manually:
+#   docker compose -f shadow/docker-compose.yml up -d --build
+#
+# How patching works:
+#   1. spinShadow() copies apps/target/src → shadow/workspace/apps/target/src (first run).
+#   2. applyToShadow() writes unified diffs into shadow/workspace/ via the system `patch` command.
+#   3. The volume mount below makes Next.js hot-reload pick them up instantly.
+#   4. The real apps/target/src is NEVER touched — Shadow invariant preserved.
+
+services:
+  shadow:
+    build:
+      context: ../apps/target
+      dockerfile: Dockerfile
+    image: helix-shadow:latest
+    container_name: helix-shadow
+    restart: unless-stopped
+    ports:
+      - "3002:3001"
+    volumes:
+      # Host-side shadow workspace source overlays the baked-in image source.
+      # spinShadow() initialises this directory; applyToShadow() patches it.
+      - ./workspace/apps/target/src:/app/src
+    environment:
+      - NODE_ENV=development
+      - NEXT_TELEMETRY_DISABLED=1
+      - WATCHPACK_POLLING=true
+      - CHOKIDAR_USEPOLLING=true
+      # Pass Supabase credentials so the shadow app can connect (same DB as real target).
+      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL:-}
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY:-}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-}

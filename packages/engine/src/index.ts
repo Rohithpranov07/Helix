@@ -19,6 +19,8 @@ export { mintAntibody, makeAntibodyId, makeSignature } from "./memory/mint.js";
 export type { MintSource } from "./memory/mint.js";
 export { matchAntibody, blockRecurrence } from "./memory/recall.js";
 export type { AntibodyMatch, RecurrenceReport } from "./memory/recall.js";
+export { spinShadow, applyToShadow, replayTraffic } from "./shadow/runtime.js";
+export type { TrafficCase, TrafficReplay } from "./shadow/runtime.js";
 
 // ── Reflex handlers ──────────────────────────────────────────────────────────
 
@@ -31,7 +33,10 @@ export async function scanRun(req: ScanRunReq): Promise<ScanRunRes> {
 export async function vulnHeal(req: VulnHealReq): Promise<VulnHealRes> {
   const { healVulnerability } = await import("./immune/heal.js");
   const { mintAntibody } = await import("./memory/mint.js");
+  const { applyInShadow } = await import("./immune/patch.js");
+  const { applyToShadow } = await import("./shadow/runtime.js");
   const { vulnerability, proof } = await healVulnerability(req.findingId, {
+    applyShadow: (f, p) => applyInShadow(f, p, applyToShadow),
     mint: async (finding) => {
       const ab = await mintAntibody({ type: "vuln", ref: finding._id });
       return ab.antibodyId;
