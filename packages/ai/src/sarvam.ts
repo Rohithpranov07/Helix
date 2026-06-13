@@ -198,6 +198,18 @@ export async function tts(opts: TtsOptions): Promise<Buffer> {
   return Buffer.from(b64, "base64");
 }
 
+/**
+ * Voice text fallback — wraps tts() and returns null instead of throwing.
+ * Callers should print the text when null is returned.
+ */
+export async function ttsSafe(opts: TtsOptions): Promise<Buffer | null> {
+  try {
+    return await tts(opts);
+  } catch {
+    return null;
+  }
+}
+
 // ---------- STT (Saaras v3) ----------
 
 export interface SttOptions {
@@ -215,7 +227,7 @@ export async function stt(opts: SttOptions): Promise<SttResult> {
   const key = apiKey();
 
   const form = new FormData();
-  const blob = new Blob([opts.audio], { type: "audio/wav" });
+  const blob = new Blob([new Uint8Array(opts.audio)], { type: "audio/wav" });
   form.append("file", blob, opts.filename ?? "audio.wav");
   form.append("model", "saaras:v3");
   if (opts.languageCode) form.append("language_code", opts.languageCode);

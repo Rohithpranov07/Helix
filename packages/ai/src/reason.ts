@@ -11,11 +11,27 @@ export interface ReasonOptions {
   schema?: z.ZodTypeAny;
 }
 
+const CREDIT_EXHAUSTED = new Set([402, 429]);
+
 export async function reason(opts: ReasonOptions): Promise<ChatResult> {
   if (process.env["HELIX_SOVEREIGN"] === "1") {
     return sovereignChat(opts);
   }
-  return chat(opts);
+  try {
+    return await chat(opts);
+  } catch (err) {
+    // Auto-fallback: Sarvam credits exhausted → sovereign if configured
+    if (
+      err instanceof ExternalApiError &&
+      err.provider === "sarvam" &&
+      err.statusCode != null &&
+      CREDIT_EXHAUSTED.has(err.statusCode) &&
+      process.env["HELIX_SOVEREIGN_BASE"]
+    ) {
+      return sovereignChat(opts);
+    }
+    throw err;
+  }
 }
 
 async function sovereignChat(opts: ReasonOptions): Promise<ChatResult> {
