@@ -22,6 +22,7 @@ export type { AntibodyMatch, RecurrenceReport } from "./memory/recall.js";
 export { spinShadow, applyToShadow, replayTraffic } from "./shadow/runtime.js";
 export type { TrafficCase, TrafficReplay } from "./shadow/runtime.js";
 export { verifyEquivalence } from "./shadow/verify.js";
+export { handleIncident } from "./nervous/incident.js";
 
 // ── Reflex handlers ──────────────────────────────────────────────────────────
 
@@ -48,18 +49,10 @@ export async function vulnHeal(req: VulnHealReq): Promise<VulnHealRes> {
   return proof ? { vulnerability, proof } : { vulnerability };
 }
 
-export async function incidentHandle(_req: IncidentHandleReq): Promise<IncidentHandleRes> {
-  return {
-    incident: {
-      incidentId: "stub-" + Date.now(),
-      deployId: _req.deployId,
-      detectedAt: new Date().toISOString(),
-      baselineDelta: 0,
-      causalChain: [],
-      failingRequest: _req.signal,
-      userImpactSeconds: 0,
-    },
-  };
+export async function incidentHandle(req: IncidentHandleReq): Promise<IncidentHandleRes> {
+  const { handleIncident } = await import("./nervous/incident.js");
+  const incident = await handleIncident(req);
+  return { incident };
 }
 
 export async function genomePair(_req: GenomePairReq): Promise<GenomePairRes> {

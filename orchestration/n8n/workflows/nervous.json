@@ -1,0 +1,108 @@
+{
+  "name": "HELIX Nervous System — Resurrection Reflex",
+  "nodes": [
+    {
+      "id": "trigger-webhook",
+      "name": "Webhook: Deploy Signal",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "parameters": {
+        "path": "helix-deploy-signal",
+        "httpMethod": "POST",
+        "responseMode": "responseNode"
+      }
+    },
+    {
+      "id": "incident-handle",
+      "name": "HTTP: incident.handle",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:3000/api/reflex/incident-handle",
+        "sendBody": true,
+        "contentType": "json",
+        "body": {
+          "deployId": "={{ $json.body.deployId }}",
+          "signal": "={{ $json.body.signal }}"
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "id": "check-rollback",
+      "name": "IF: Rollback Recommended",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [760, 300],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": false },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.incident.rollbackAt }}",
+              "rightValue": "",
+              "operator": { "type": "string", "operation": "notEmpty" }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "trigger-heal",
+      "name": "HTTP: trigger vuln scan (post-rollback)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1020, 200],
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:3000/api/reflex/scan",
+        "sendBody": true,
+        "contentType": "json",
+        "body": {
+          "targetUrl": "http://host.docker.internal:3001"
+        },
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "id": "respond-ok",
+      "name": "Respond: 200 OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1020, 400],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { incidentId: $('HTTP: incident.handle').item.json.incident?.incidentId, causalSteps: $('HTTP: incident.handle').item.json.incident?.causalChain?.length ?? 0 } }}"
+      }
+    }
+  ],
+  "connections": {
+    "Webhook: Deploy Signal": {
+      "main": [[{ "node": "HTTP: incident.handle", "type": "main", "index": 0 }]]
+    },
+    "HTTP: incident.handle": {
+      "main": [[{ "node": "IF: Rollback Recommended", "type": "main", "index": 0 }]]
+    },
+    "IF: Rollback Recommended": {
+      "main": [
+        [{ "node": "HTTP: trigger vuln scan (post-rollback)", "type": "main", "index": 0 }],
+        [{ "node": "Respond: 200 OK", "type": "main", "index": 0 }]
+      ]
+    },
+    "HTTP: trigger vuln scan (post-rollback)": {
+      "main": [[{ "node": "Respond: 200 OK", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
