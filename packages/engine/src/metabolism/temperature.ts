@@ -103,7 +103,7 @@ function walkSourceFiles(dir: string): string[] {
   return out;
 }
 
-function defaultCollectSources(repoPath: string): string {
+export function collectRepoSources(repoPath: string): string {
   const absRoot = resolve(repoPath);
   if (!existsSync(absRoot)) {
     throw new ValidationError(`measureEntropy: repoPath does not exist: ${absRoot}`);
@@ -274,7 +274,7 @@ export async function measureEntropy(
 ): Promise<HelixDoc<EntropyPoint>> {
   await connectDb();
 
-  const collect = deps?.collectSources ?? defaultCollectSources;
+  const collect = deps?.collectSources ?? collectRepoSources;
   const analyze = deps?.analyze;
   const getHistory = deps?.listHistory ?? listEntropyPoints;
 

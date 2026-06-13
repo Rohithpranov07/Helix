@@ -28,6 +28,11 @@ export { verifyEquivalence } from "./shadow/verify.js";
 export { captureIntent, seedShopLite, SHOPLITE_MODULES } from "./genome/capture.js";
 export { measureEntropy, computeTemperature, computeProjectedWeeks } from "./metabolism/temperature.js";
 export type { MeasureEntropyDeps } from "./metabolism/temperature.js";
+export { consolidate } from "./metabolism/consolidator.js";
+export type {
+  Duplication, ConsolidateDeps, ConsolidateResult,
+  ConsolidateEvent, ConsolidateOutcome,
+} from "./metabolism/consolidator.js";
 export {
   pairGenome,
   NOT_WIRED_VERIFY_CORRECTION,
