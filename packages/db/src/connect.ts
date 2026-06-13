@@ -1,10 +1,33 @@
 import mongoose from "mongoose";
 import { ExternalApiError } from "@helix/shared";
 
-let cached: typeof mongoose | null = null;
+// Global cache survives Next.js hot-reloads in dev mode.
+// In production this is just a module singleton.
+declare global {
+  // eslint-disable-next-line no-var
+  var __helixMongoose: {
+    conn: typeof mongoose | null;
+    promise: Promise<typeof mongoose> | null;
+  };
+}
+
+if (!global.__helixMongoose) {
+  global.__helixMongoose = { conn: null, promise: null };
+}
+
+const cache = global.__helixMongoose;
 
 export async function connectDb(): Promise<typeof mongoose> {
-  if (cached) return cached;
+  // Already connected and connection is alive
+  if (cache.conn && mongoose.connection.readyState === 1) {
+    return cache.conn;
+  }
+
+  // Connection in progress — wait for it
+  if (cache.promise) {
+    cache.conn = await cache.promise;
+    return cache.conn;
+  }
 
   const uri = process.env["MONGODB_URI"];
   const dbName = process.env["MONGODB_DB"] ?? "helix";
@@ -13,20 +36,34 @@ export async function connectDb(): Promise<typeof mongoose> {
     throw new ExternalApiError("MONGODB_URI environment variable is not set", "mongodb");
   }
 
-  try {
-    cached = await mongoose.connect(uri, { dbName });
-    return cached;
-  } catch (err) {
-    throw new ExternalApiError(
-      `MongoDB connection failed: ${err instanceof Error ? err.message : String(err)}`,
-      "mongodb",
-    );
-  }
+  cache.promise = mongoose
+    .connect(uri, {
+      dbName,
+      serverSelectionTimeoutMS: 10_000,
+      socketTimeoutMS: 45_000,
+    })
+    .then((m) => {
+      cache.conn = m;
+      cache.promise = null;
+      return m;
+    })
+    .catch((err) => {
+      cache.promise = null;
+      cache.conn = null;
+      throw new ExternalApiError(
+        `MongoDB connection failed: ${err instanceof Error ? err.message : String(err)}`,
+        "mongodb",
+      );
+    });
+
+  cache.conn = await cache.promise;
+  return cache.conn;
 }
 
 export async function disconnectDb(): Promise<void> {
-  if (cached) {
+  if (cache.conn) {
     await mongoose.disconnect();
-    cached = null;
+    cache.conn = null;
+    cache.promise = null;
   }
 }

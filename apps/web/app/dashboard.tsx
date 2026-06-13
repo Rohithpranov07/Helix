@@ -313,6 +313,7 @@ function GenomePanel() {
   const [acting, setActing] = useState<Set<string>>(new Set());
   const [panelError, setPanelError] = useState<string | null>(null);
   const [connError, setConnError] = useState<string | null>(null);
+  const [autoStatus, setAutoStatus] = useState<string | null>(null);
 
   const loadConnections = useCallback(async () => {
     try {
@@ -332,7 +333,6 @@ function GenomePanel() {
 
   useEffect(() => {
     void loadConnections();
-    // Check URL for github_connected / error params
     const params = new URLSearchParams(window.location.search);
     const connected = params.get("github_connected");
     if (connected) {
@@ -342,9 +342,20 @@ function GenomePanel() {
         setOwner(o);
         setRepo(r);
         setSelectedConn(connected);
-        void loadDrifts(o, r);
+        window.history.replaceState({}, "", window.location.pathname);
+        // Auto-run full genome workflow after successful OAuth connection
+        void (async () => {
+          await loadDrifts(o, r);
+          // Only auto-run if no existing reports
+          setDrifts((prev) => {
+            if (prev.length === 0) {
+              void runAutoWorkflow(o, r);
+            }
+            return prev;
+          });
+        })();
+        return;
       }
-      // clean up URL
       window.history.replaceState({}, "", window.location.pathname);
     }
     const err = params.get("error");
@@ -352,6 +363,7 @@ function GenomePanel() {
       setConnError(decodeURIComponent(err));
       window.history.replaceState({}, "", window.location.pathname);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadConnections, loadDrifts]);
 
   function parseGitHubUrl(raw: string): { owner: string; repo: string } | null {
@@ -396,8 +408,8 @@ function GenomePanel() {
     await loadDrifts(conn.owner, conn.repo);
   }
 
-  async function runIndex() {
-    if (!selectedConn) return;
+  async function runIndex(o = owner, r = repo) {
+    if (!o || !r) return;
     setIndexing(true);
     setPanelError(null);
     setIndexResult(null);
@@ -406,41 +418,60 @@ function GenomePanel() {
       const res = await fetch("/api/reflex/genome-index", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ owner, repo, intentDocs: docPaths }),
+        body: JSON.stringify({ owner: o, repo: r, intentDocs: docPaths }),
       });
       const json = (await res.json()) as { indexed?: number; error?: string; message?: string };
       if (!res.ok) throw new Error(json.message ?? json.error ?? `HTTP ${res.status}`);
       setIndexResult(`Indexed ${json.indexed ?? 0} modules into intent strands.`);
+      return json.indexed ?? 0;
     } catch (e) {
       setPanelError(e instanceof Error ? e.message : "indexing failed");
+      throw e;
     } finally {
       setIndexing(false);
     }
   }
 
-  async function runDrift() {
-    if (!selectedConn) return;
+  async function runDrift(o = owner, r = repo) {
+    if (!o || !r) return;
     setDetecting(true);
     setPanelError(null);
     try {
       const res = await fetch("/api/reflex/genome-drift", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ owner, repo }),
+        body: JSON.stringify({ owner: o, repo: r }),
       });
       const json = (await res.json()) as { report?: DriftReport; error?: string; message?: string };
       if (!res.ok) throw new Error(json.message ?? json.error ?? `HTTP ${res.status}`);
       if (json.report) {
-        setDrifts((prev) => {
-          const next = [json.report!, ...prev.filter((d) => d.driftId !== json.report!.driftId)];
-          return next;
-        });
+        setDrifts((prev) => [json.report!, ...prev.filter((d) => d.driftId !== json.report!.driftId)]);
       }
+      return json.report;
     } catch (e) {
       setPanelError(e instanceof Error ? e.message : "drift detection failed");
+      throw e;
     } finally {
       setDetecting(false);
     }
+  }
+
+  async function runAutoWorkflow(o: string, r: string) {
+    setAutoStatus("Step 1/2 — Indexing repository into intent strands…");
+    setPanelError(null);
+    try {
+      await runIndex(o, r);
+    } catch {
+      setAutoStatus(null);
+      return; // error already shown via setPanelError
+    }
+    setAutoStatus("Step 2/2 — Detecting drift against intent strands…");
+    try {
+      await runDrift(o, r);
+    } catch {
+      // error shown via setPanelError
+    }
+    setAutoStatus(null);
   }
 
   async function approve(driftId: string) {
@@ -592,6 +623,17 @@ function GenomePanel() {
               {indexResult}
             </div>
           )}
+        </div>
+      )}
+
+      {autoStatus && (
+        <div style={{
+          background: "#0c1a3a", border: "1px solid #1e40af", borderRadius: 6,
+          padding: "10px 14px", color: "#93c5fd", fontSize: 13, marginBottom: 12,
+          display: "flex", alignItems: "center", gap: 10,
+        }}>
+          <span style={{ display: "inline-block", width: 10, height: 10, borderRadius: "50%", background: "#3b82f6", boxShadow: "0 0 6px #3b82f6", flexShrink: 0 }} />
+          {autoStatus}
         </div>
       )}
 
