@@ -1,0 +1,51 @@
+version: "3.8"
+
+# Helix local dev stack
+# Start all: docker compose up -d
+# n8n UI: http://localhost:5678
+# MongoDB (only when MONGODB_URI is not set): mongodb://localhost:27017
+
+services:
+  n8n:
+    image: n8nio/n8n:2.26.3
+    container_name: helix-n8n
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_HOST=localhost
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - N8N_EDITOR_BASE_URL=http://localhost:5678
+      - WEBHOOK_URL=http://localhost:5678/
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
+      - N8N_SECURE_COOKIE=false
+      - GENERIC_TIMEZONE=Asia/Kolkata
+      - N8N_DIAGNOSTICS_ENABLED=false
+      - N8N_PERSONALIZATION_ENABLED=false
+    volumes:
+      - n8n_data:/home/node/.n8n
+    networks:
+      - helix
+
+  # Local MongoDB — only needed when not using Atlas (MONGODB_URI env not set)
+  mongo:
+    image: mongo:7
+    container_name: helix-mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - helix
+    profiles:
+      - local-mongo
+
+volumes:
+  n8n_data:
+  mongo_data:
+
+networks:
+  helix:
+    driver: bridge
