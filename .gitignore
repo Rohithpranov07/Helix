@@ -1,0 +1,38 @@
+# Node
+node_modules/
+.pnpm-store/
+
+# Next.js
+.next/
+out/
+build/
+
+# TypeScript build output
+dist/
+*.tsbuildinfo
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Docker volumes
+docker/volumes/
+n8n_data/
+mongo_data/
+
+# Turbo
+.turbo/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
