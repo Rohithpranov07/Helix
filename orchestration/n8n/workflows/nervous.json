@@ -24,11 +24,9 @@
         "url": "http://host.docker.internal:3000/api/reflex/incident-handle",
         "sendBody": true,
         "contentType": "json",
-        "body": {
-          "deployId": "={{ $json.body.deployId }}",
-          "signal": "={{ $json.body.signal }}"
-        },
-        "options": { "timeout": 30000 }
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ deployId: $json.body.deployId, signal: $json.body.signal }) }}",
+        "options": { "timeout": 120000 }
       },
       "continueOnFail": true
     },
@@ -62,7 +60,8 @@
         "url": "http://host.docker.internal:3000/api/reflex/scan",
         "sendBody": true,
         "contentType": "json",
-        "body": { "targetUrl": "http://host.docker.internal:3001" },
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ targetUrl: 'http://host.docker.internal:3001' }) }}",
         "options": { "timeout": 60000 }
       },
       "continueOnFail": true
@@ -86,7 +85,8 @@
         "url": "http://host.docker.internal:3000/api/reflex/vuln-heal",
         "sendBody": true,
         "contentType": "json",
-        "body": { "findingId": "={{ $json._id }}" },
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ findingId: $json._id }) }}",
         "options": { "timeout": 120000 }
       },
       "continueOnFail": true
@@ -102,8 +102,9 @@
         "url": "http://host.docker.internal:3000/api/reflex/incident-resolve",
         "sendBody": true,
         "contentType": "json",
-        "body": { "incidentId": "={{ $('HTTP: incident.handle').item.json.incident.incidentId }}" },
-        "options": { "timeout": 30000 }
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ incidentId: $('HTTP: incident.handle').item.json.incident.incidentId }) }}",
+        "options": { "timeout": 120000 }
       },
       "continueOnFail": true
     },

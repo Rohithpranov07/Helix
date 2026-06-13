@@ -46,14 +46,8 @@
         },
         "sendBody": true,
         "contentType": "json",
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "targetUrl",
-              "value": "http://host.docker.internal:3001"
-            }
-          ]
-        },
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ targetUrl: 'http://host.docker.internal:3001' }) }}",
         "options": {
           "response": {
             "response": {
@@ -95,14 +89,8 @@
         },
         "sendBody": true,
         "contentType": "json",
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "findingId",
-              "value": "={{ $json._id }}"
-            }
-          ]
-        },
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ findingId: $json._id }) }}",
         "options": {
           "response": {
             "response": {

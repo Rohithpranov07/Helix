@@ -1,6 +1,40 @@
 # n8n Orchestration
 
-## Immune System workflow — import & fire
+## Workflow-as-code sync (Public API) — preferred
+
+The JSON files in `workflows/` are the source of truth. `scripts/n8n-sync.mjs`
+pushes them to an n8n instance over the [Public API](https://docs.n8n.io/api/)
+(`X-N8N-API-KEY` header, `/api/v1` base) so you never hand-import again.
+
+**Configure** (`.env`):
+```
+N8N_API_URL=https://<you>.app.n8n.cloud   # or http://localhost:5678 for self-hosted
+N8N_API_KEY=<key for THAT instance>        # Settings → n8n API. Cloud keys != self-hosted keys.
+```
+
+**Commands** (run from repo root):
+```bash
+pnpm n8n:ping    # verify URL + key (read-only)
+pnpm n8n:list    # list workflows on the instance
+pnpm n8n:push    # upsert all workflows, leave INACTIVE
+pnpm n8n:sync    # upsert all workflows AND activate
+```
+
+The script upserts by workflow **name** (PUT if present, POST if new) — idempotent,
+safe to re-run. It strips read-only keys (`id`, `active`, `tags`, `pinData`,
+`versionId`, `meta`) that the API rejects with a 400.
+
+**⚠ Cloud reachability:** workflows call the control plane at
+`http://host.docker.internal:3000`, which only resolves for **self-hosted Docker
+n8n on the same host**. A **cloud** instance cannot reach your laptop — expose
+`localhost:3000` via a tunnel (ngrok/cloudflared), set `HELIX_PUBLIC_API_BASE` to
+the tunnel URL (the sync rewrites the control-plane host to it), then `pnpm n8n:sync`
+to activate. Until then, use `pnpm n8n:push` (inactive) so a scheduled cron
+doesn't fire-and-fail.
+
+---
+
+## Immune System workflow — import & fire (manual alternative)
 
 The workflow is pre-built at `orchestration/n8n/workflows/immune.json`.
 
