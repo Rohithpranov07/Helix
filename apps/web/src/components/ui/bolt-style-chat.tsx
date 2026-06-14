@@ -2,9 +2,9 @@
 
 import React, { useState, useRef, useEffect } from 'react'
 import { 
-  Plus, Lightbulb, Paperclip, Image as ImageIcon, FileCode,
+  Plus, FileCode,
   ChevronDown, Check, Sparkles, Zap, Brain, Bolt,
-  SendHorizontal, Play
+  SendHorizontal
 } from 'lucide-react'
 
 // TYPES
@@ -31,12 +31,11 @@ const models: Model[] = [
   { id: 'fast-scan', name: 'Fast Scan', description: 'Quick drift detection', icon: <Zap className="size-4 text-emerald-400" /> }
 ]
 
-function ModelSelector() {
+function ModelSelector({ selected, onSelect }: { selected: Model, onSelect: (m: Model) => void }) {
   const [isOpen, setIsOpen] = useState(false)
-  const [selected, setSelected] = useState<Model>(models[0]!)
 
   const handleSelect = (model: Model) => {
-    setSelected(model)
+    onSelect(model)
     setIsOpen(false)
   }
 
@@ -92,15 +91,19 @@ function ModelSelector() {
   )
 }
 
-// CHAT INPUT
-function ChatInput({ value, onChange, onSend, placeholder }: {
+function ChatInput({ value, onChange, onSend, placeholder, actionLabel = "Connect", isProcessing = false, onUploadIntentDoc }: {
   value: string;
   onChange: (val: string) => void;
-  onSend?: () => void;
+  onSend?: (modelId: string) => void;
   placeholder?: string;
+  actionLabel?: string;
+  isProcessing?: boolean;
+  onUploadIntentDoc?: (content: string) => void;
 }) {
   const [showAttachMenu, setShowAttachMenu] = useState(false)
+  const [selectedModel, setSelectedModel] = useState<Model>(models[0]!)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     const textarea = textareaRef.current
@@ -113,8 +116,24 @@ function ChatInput({ value, onChange, onSend, placeholder }: {
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
-      onSend?.()
+      if (!isProcessing) {
+        onSend?.(selectedModel.id)
+      }
     }
+  }
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      if (e.target?.result && typeof e.target.result === 'string') {
+        onUploadIntentDoc?.(e.target.result)
+        setShowAttachMenu(false)
+      }
+    }
+    reader.readAsText(file)
+    e.target.value = '' // reset input
   }
 
   return (
@@ -130,6 +149,7 @@ function ChatInput({ value, onChange, onSend, placeholder }: {
             placeholder={placeholder}
             className="w-full resize-none bg-transparent text-[15px] text-white placeholder-[#5a5a5f] px-5 pt-5 pb-3 focus:outline-none min-h-[80px] max-h-[200px]"
             style={{ height: '80px' }}
+            disabled={isProcessing}
           />
         </div>
 
@@ -138,7 +158,8 @@ function ChatInput({ value, onChange, onSend, placeholder }: {
             <div className="relative">
               <button
                 onClick={() => setShowAttachMenu(!showAttachMenu)}
-                className="flex items-center justify-center size-8 rounded-full bg-white/[0.08] hover:bg-white/[0.12] text-[#8a8a8f] hover:text-white transition-all duration-200 active:scale-95"
+                disabled={isProcessing}
+                className="flex items-center justify-center size-8 rounded-full bg-white/[0.08] hover:bg-white/[0.12] text-[#8a8a8f] hover:text-white transition-all duration-200 active:scale-95 disabled:opacity-50"
               >
                 <Plus className={`size-4 transition-transform duration-200 ${showAttachMenu ? 'rotate-45' : ''}`} />
               </button>
@@ -148,32 +169,38 @@ function ChatInput({ value, onChange, onSend, placeholder }: {
                   <div className="fixed inset-0 z-40" onClick={() => setShowAttachMenu(false)} />
                   <div className="absolute bottom-full left-0 mb-2 z-50 bg-[#1a1a1e]/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl shadow-black/50 overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-200">
                     <div className="p-1.5 min-w-[180px]">
-                      {[
-                        { icon: <FileCode className="size-4" />, label: 'Upload intent doc' }
-                      ].map((item, i) => (
-                        <button key={i} className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-[#a0a0a5] hover:bg-white/5 hover:text-white transition-all duration-150">
-                          {item.icon}
-                          <span className="text-sm">{item.label}</span>
-                        </button>
-                      ))}
+                      <button onClick={() => fileInputRef.current?.click()} className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-[#a0a0a5] hover:bg-white/5 hover:text-white transition-all duration-150">
+                        <FileCode className="size-4" />
+                        <span className="text-sm">Upload intent doc</span>
+                      </button>
+                      <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" accept=".md,.txt,.json,.csv" />
                     </div>
                   </div>
                 </>
               )}
             </div>
-            <ModelSelector />
+            <ModelSelector selected={selectedModel} onSelect={setSelectedModel} />
           </div>
 
           <div className="flex-1" />
 
           <div className="flex items-center gap-2">
             <button
-              onClick={() => onSend?.()}
-              disabled={!value.trim()}
+              onClick={() => onSend?.(selectedModel.id)}
+              disabled={!value.trim() || isProcessing}
               className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium bg-[#1488fc] hover:bg-[#1a94ff] text-white transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 shadow-[0_0_20px_rgba(20,136,252,0.3)]"
             >
-              <span className="hidden sm:inline">Connect</span>
-              <SendHorizontal className="size-4" />
+              {isProcessing ? (
+                <>
+                  <span className="hidden sm:inline">Processing...</span>
+                  <div className="size-3.5 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                </>
+              ) : (
+                <>
+                  <span className="hidden sm:inline">{actionLabel}</span>
+                  <SendHorizontal className="size-4" />
+                </>
+              )}
             </button>
           </div>
         </div>
@@ -207,39 +234,18 @@ function RayBackground() {
   )
 }
 
-// ANNOUNCEMENT BADGE COMPONENT
-function AnnouncementBadge({ text }: { text: string }) {
-  const content = (
-    <>
-      <span className="absolute top-0 left-0 right-0 h-1/2 pointer-events-none opacity-70 mix-blend-overlay" style={{ background: 'radial-gradient(ellipse at center top, rgba(255, 255, 255, 0.15) 0%, transparent 70%)' }} />
-      <span className="absolute -top-px left-1/2 -translate-x-1/2 h-[2px] w-[100px] opacity-60" style={{ background: 'linear-gradient(90deg, transparent 0%, rgba(37, 119, 255, 0.8) 20%, rgba(126, 93, 225, 0.8) 50%, rgba(59, 130, 246, 0.8) 80%, transparent 100%)', filter: 'blur(0.5px)' }} />
-      <Bolt className="size-4 relative z-10 text-white" />
-      <span className="relative z-10 text-white font-medium">{text}</span>
-    </>
-  )
-
-  const className = "relative inline-flex items-center gap-2 px-5 py-2 min-h-[40px] rounded-full text-sm overflow-hidden transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]"
-  const style = {
-    background: 'linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05))',
-    backdropFilter: 'blur(20px) saturate(140%)',
-    boxShadow: 'inset 0 1px rgba(255,255,255,0.2), inset 0 -1px rgba(0,0,0,0.1), 0 8px 32px -8px rgba(0,0,0,0.1), 0 0 0 1px rgba(255,255,255,0.08)'
-  }
-
-  return (
-    <div className={className} style={style}>{content}</div>
-  )
-}
-
 // MAIN BOLT CHAT COMPONENT
 interface BoltChatProps {
   repoValue: string;
   onRepoChange: (v: string) => void;
-  onConnect: () => void;
+  onConnect: (modelId: string) => void;
   connectedRepos: Array<{ owner: string, repo: string }>;
   onSelectRepo: (owner: string, repo: string) => void;
   selectedConnKey?: string;
   onAction?: (action: 'index' | 'detect' | 'refresh') => void;
   actionStates?: { indexing: boolean, detecting: boolean };
+  isConnected?: boolean;
+  onUploadIntentDoc?: (content: string) => void;
   children?: React.ReactNode;
 }
 
@@ -252,8 +258,12 @@ export function GenomeConnectUI({
   selectedConnKey,
   onAction,
   actionStates,
+  isConnected,
+  onUploadIntentDoc,
   children
 }: BoltChatProps) {
+  const isProcessing = actionStates?.indexing || actionStates?.detecting;
+
   return (
     <div className="relative flex flex-col items-center min-h-screen w-full overflow-hidden bg-[#0f0f0f] -mt-10 pt-16 pb-20">
       <RayBackground />
@@ -277,8 +287,11 @@ export function GenomeConnectUI({
           <ChatInput 
             value={repoValue} 
             onChange={onRepoChange} 
-            onSend={onConnect} 
+            onSend={(modelId) => onConnect(modelId)} 
             placeholder="https://github.com/octocat/my-repo" 
+            actionLabel={isConnected ? "Run" : "Connect"}
+            isProcessing={isProcessing}
+            onUploadIntentDoc={onUploadIntentDoc}
           />
         </div>
 

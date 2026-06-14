@@ -30,9 +30,9 @@ interface IncidentPatch {
 
 const STATUS_CONFIG = {
   pending_approval: { color: "#f97316", bg: "rgba(249,115,22,0.1)", border: "rgba(249,115,22,0.25)", label: "PENDING APPROVAL" },
-  approved:         { color: "#22c55e", bg: "rgba(34,197,94,0.1)",  border: "rgba(34,197,94,0.25)",  label: "APPROVED" },
-  rejected:         { color: "#ef4444", bg: "rgba(239,68,68,0.1)",  border: "rgba(239,68,68,0.25)",  label: "REJECTED" },
-  pr_created:       { color: "#22c55e", bg: "rgba(34,197,94,0.1)",  border: "rgba(34,197,94,0.25)",  label: "PR CREATED" },
+  approved: { color: "#22c55e", bg: "rgba(34,197,94,0.1)", border: "rgba(34,197,94,0.25)", label: "APPROVED" },
+  rejected: { color: "#ef4444", bg: "rgba(239,68,68,0.1)", border: "rgba(239,68,68,0.25)", label: "REJECTED" },
+  pr_created: { color: "#22c55e", bg: "rgba(34,197,94,0.1)", border: "rgba(34,197,94,0.25)", label: "PR CREATED" },
 };
 
 function StyledSelect({ value, onChange, children, disabled }: {
@@ -171,10 +171,10 @@ export default function IncidentsPage() {
       {/* Stat cards */}
       <div className="grid grid-cols-4 gap-3 mb-6">
         {[
-          { label: "Total Incidents", value: patches.length,   color: "#f1f5f9", Icon: Layers },
-          { label: "Pending",         value: patches.filter((p) => p.status === "pending_approval").length, color: "#f97316", Icon: Clock },
-          { label: "Resolved",        value: totalResolved,    color: "#22c55e", Icon: CheckCircle },
-          { label: "Projects",        value: projects.length,  color: "#a78bfa", Icon: AlertTriangle },
+          { label: "Total Incidents", value: patches.length, color: "#f1f5f9", Icon: Layers },
+          { label: "Pending", value: patches.filter((p) => p.status === "pending_approval").length, color: "#f97316", Icon: Clock },
+          { label: "Resolved", value: totalResolved, color: "#22c55e", Icon: CheckCircle },
+          { label: "Projects", value: projects.length, color: "#a78bfa", Icon: AlertTriangle },
         ].map(({ label, value, color, Icon }) => (
           <div key={label} className="reflex-stat rounded-xl p-4 border" style={{ background: "rgba(14,14,18,0.8)", borderColor: "rgba(255,255,255,0.06)" }}>
             <div className="flex items-center justify-between mb-3">

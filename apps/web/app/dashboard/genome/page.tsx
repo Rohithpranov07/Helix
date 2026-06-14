@@ -41,6 +41,7 @@ export default function GenomePage() {
   const [owner, setOwner] = useState("");
   const [repo, setRepo] = useState("");
   const [intentDocs, setIntentDocs] = useState("");
+  const [intentDocsContent, setIntentDocsContent] = useState<string[]>([]);
   const [selectedConn, setSelectedConn] = useState<string | null>(null);
   const [indexing, setIndexing] = useState(false);
   const [detecting, setDetecting] = useState(false);
@@ -85,7 +86,10 @@ export default function GenomePage() {
         setOwner(o); setRepo(r); setSelectedConn(connected);
         window.history.replaceState({}, "", window.location.pathname);
         void loadDrifts(o, r);
-        void runIndex(o, r);
+        void (async () => {
+          await runIndex(o, r);
+          await runDrift(o, r);
+        })();
       }
     }
     const err = params.get("error");
@@ -98,9 +102,29 @@ export default function GenomePage() {
     if (p) { setOwner(p.owner); setRepo(p.repo); } else setRepo(raw);
   }
 
-  function connectOAuth() {
+  function connectOAuth(modelId: string = 'deep-scan') {
     const o = owner.trim(), r = repo.trim();
     if (!o || !r) { setError("Enter owner + repo before connecting."); return; }
+
+    const key = `${o}/${r}`;
+    if (connections.some((c) => `${c.owner}/${c.repo}` === key)) {
+      // Already connected! Skip OAuth and animation. Just select it and run requested mode.
+      setSelectedConn(key);
+      setOwner(o);
+      setRepo(r);
+      setDrifts([]);
+      void loadDrifts(o, r);
+      if (modelId === 'deep-scan') {
+        void (async () => {
+          await runIndex(o, r);
+          await runDrift(o, r);
+        })();
+      } else {
+        void runDrift(o, r);
+      }
+      return;
+    }
+
     setError(null);
     setIsConnecting(true);
   }
@@ -117,7 +141,7 @@ export default function GenomePage() {
       const docs = intentDocs.split(",").map((s) => s.trim()).filter(Boolean);
       const res = await fetch("/api/reflex/genome-index", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ owner: o, repo: r, intentDocs: docs }),
+        body: JSON.stringify({ owner: o, repo: r, intentDocs: docs, intentDocsContent }),
       });
       const json = await res.json() as { indexed?: number; error?: string; message?: string };
       if (!res.ok) throw new Error(json.message ?? json.error ?? `HTTP ${res.status}`);
@@ -194,6 +218,8 @@ export default function GenomePage() {
           if (action === 'refresh') void loadDrifts(owner, repo);
         }}
         actionStates={{ indexing, detecting }}
+        isConnected={connections.some((c) => `${c.owner}/${c.repo}` === (repo && owner ? `${owner}/${repo}` : repo))}
+        onUploadIntentDoc={(content) => setIntentDocsContent(prev => [...prev, content])}
       >
         <div style={{ padding: "0 20px" }}>
           {connError && (
@@ -364,9 +390,9 @@ export default function GenomePage() {
                         {/* Mismatches */}
                         {d.mismatches.length > 0 && (
                           <div style={{ borderTop: "1px solid rgba(255,255,255,0.04)", padding: "12px 20px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
-                            {d.mismatches.map((m) => (
+                            {d.mismatches.map((m, i) => (
                               <div
-                                key={m.invariantId}
+                                key={`${m.invariantId}-${i}`}
                                 style={{
                                   background: "rgba(0,0,0,0.35)",
                                   borderRadius: 8,

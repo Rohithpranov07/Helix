@@ -188,6 +188,7 @@ export async function detectAndHealRailwayFailure(
   const causal = JSON.parse(causalResult.content) as z.infer<typeof CausalChainSchema>;
 
   // 5. Fetch repo source via GitHub API (using connected OAuth token)
+  await connectDb(); // Ensure DB connection is alive after long AI operations
   const conn = await findGitHubConnection(githubOwner, githubRepo);
   if (!conn) {
     throw new Error(

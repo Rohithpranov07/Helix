@@ -169,6 +169,7 @@ export const GenomeIndexReqSchema = z.object({
   owner: z.string().min(1),
   repo: z.string().min(1),
   intentDocs: z.array(z.string()).default([]), // paths of PRD/spec files to use as intent
+  intentDocsContent: z.array(z.string()).optional(), // actual text content of uploaded docs
 });
 export const GenomeIndexResSchema = z.object({
   strands: z.array(IntentStrandSchema),

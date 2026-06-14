@@ -66,8 +66,10 @@ export async function approveDriftPatch(driftId: string): Promise<ApproveResult>
   // Write each patched file to the shadow branch
   const committed: string[] = [];
   for (const mismatch of report.mismatches) {
+    if (committed.includes(mismatch.affectedFile)) continue; // Only write each file once
+
     // Get current file sha (required by GitHub PUT /contents)
-    const current = await readFile(token, owner, repo, mismatch.affectedFile);
+    const current = await readFile(token, owner, repo, mismatch.affectedFile, shadowBranch);
 
     await writeFile(
       token,
@@ -75,7 +77,7 @@ export async function approveDriftPatch(driftId: string): Promise<ApproveResult>
       repo,
       mismatch.affectedFile,
       mismatch.newContent,
-      `fix(genome): restore invariant [${mismatch.invariantId}] — ${mismatch.description.slice(0, 72)}`,
+      `fix(genome): restore invariants in ${mismatch.affectedFile}`,
       shadowBranch,
       current?.sha,
     );

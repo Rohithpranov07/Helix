@@ -291,6 +291,7 @@ export async function genomeIndex(req: GenomeIndexReq): Promise<GenomeIndexRes> 
     owner: req.owner,
     repo: req.repo,
     intentDocPaths: req.intentDocs,
+    intentDocsContent: req.intentDocsContent,
   });
   return { strands, indexed: strands.length };
 }

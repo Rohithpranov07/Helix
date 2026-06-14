@@ -95,12 +95,14 @@ export async function readFile(
   owner: string,
   repo: string,
   path: string,
+  ref?: string,
 ): Promise<{ content: string; sha: string } | null> {
   try {
+    const urlPath = `/repos/${owner}/${repo}/contents/${path}${ref ? `?ref=${encodeURIComponent(ref)}` : ''}`;
     const data = await ghFetch<GHContent>(
       token,
       "GET",
-      `/repos/${owner}/${repo}/contents/${path}`,
+      urlPath,
     );
     if (data.encoding !== "base64") return null;
     const content = Buffer.from(data.content.replace(/\n/g, ""), "base64").toString("utf8");

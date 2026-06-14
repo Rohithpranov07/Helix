@@ -85,12 +85,13 @@ export interface IndexRepoOptions {
   owner: string;
   repo: string;
   intentDocPaths?: string[]; // caller-specified PRD / spec files
+  intentDocsContent?: string[]; // caller-provided content
 }
 
 export async function indexGitHubRepo(
   opts: IndexRepoOptions,
 ): Promise<IntentStrand[]> {
-  const { token, owner, repo, intentDocPaths = [] } = opts;
+  const { token, owner, repo, intentDocPaths = [], intentDocsContent = [] } = opts;
 
   // 1. Fetch full tree
   const tree = await getRepoTree(token, owner, repo);
@@ -108,6 +109,11 @@ export async function indexGitHubRepo(
     if (file) {
       sharedIntentContext += `\n\n=== INTENT DOCUMENT: ${f.path} ===\n${file.content.slice(0, 10_000)}`;
     }
+  }
+
+  // 2b. Add directly uploaded intent docs
+  for (let i = 0; i < intentDocsContent.length; i++) {
+    sharedIntentContext += `\n\n=== UPLOADED INTENT DOCUMENT ${i + 1} ===\n${intentDocsContent[i]!.slice(0, 10_000)}`;
   }
 
   // 3. Group source files by module

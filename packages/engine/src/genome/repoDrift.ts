@@ -206,9 +206,15 @@ export async function detectRepoDrift(
 
       if (analysis.pairingScore < worstScore) worstScore = analysis.pairingScore;
 
-      // 5. For each mismatch: Sarvam synthesizes a minimal patch
-      for (const mismatch of analysis.mismatches) {
-        const file = fileContents.get(mismatch.affectedFile);
+      // 5. For each affected file: Sarvam synthesizes a minimal combined patch
+      const mismatchesByFile = new Map<string, typeof analysis.mismatches>();
+      for (const m of analysis.mismatches) {
+        if (!mismatchesByFile.has(m.affectedFile)) mismatchesByFile.set(m.affectedFile, []);
+        mismatchesByFile.get(m.affectedFile)!.push(m);
+      }
+
+      for (const [affectedFile, fileMismatches] of mismatchesByFile) {
+        const file = fileContents.get(affectedFile);
         if (!file) continue;
 
         const patchResult = await sarvam.chat({
@@ -216,18 +222,18 @@ export async function detectRepoDrift(
             {
               role: "system",
               content:
-                "You are HELIX Genome. Generate a minimal patch to fix a code-intent drift.\n" +
+                "You are HELIX Genome. Generate a minimal patch to fix ALL listed code-intent drifts for a single file.\n" +
                 "Output ONLY valid JSON with EXACTLY: {\"diff\":\"unified diff string\",\"newContent\":\"complete corrected file content\",\"rationale\":\"one sentence\"}\n" +
-                "The fix must restore the invariant without changing any other behavior.",
+                "The fix must restore ALL listed invariants without changing any other behavior. Return the entire corrected file content.",
             },
             {
               role: "user",
               content:
-                `Invariant violated: [${mismatch.invariantId}] — ${mismatch.description}\n\n` +
-                `File: ${mismatch.affectedFile}\n\n` +
+                `Invariants violated in this file:\n` +
+                fileMismatches.map((m) => `[${m.invariantId}] — ${m.description}`).join("\n") + `\n\n` +
+                `File: ${affectedFile}\n\n` +
                 `Current content:\n${file.content}\n\n` +
-                `Module purpose: ${strand.purpose}\n` +
-                `Invariant rule: ${strand.invariants.find((i) => i.id === mismatch.invariantId)?.rule ?? "see description"}`,
+                `Module purpose: ${strand.purpose}`,
             },
           ],
           schema: PatchSchema,
@@ -235,13 +241,15 @@ export async function detectRepoDrift(
         });
         const patch = JSON.parse(patchResult.content) as z.infer<typeof PatchSchema>;
 
-        allMismatches.push({
-          invariantId: mismatch.invariantId,
-          description: mismatch.description,
-          affectedFile: mismatch.affectedFile,
-          diff: patch.diff,
-          newContent: patch.newContent,
-        });
+        for (const mismatch of fileMismatches) {
+          allMismatches.push({
+            invariantId: mismatch.invariantId,
+            description: mismatch.description,
+            affectedFile: mismatch.affectedFile,
+            diff: patch.diff,
+            newContent: patch.newContent, // same combined fix for all mismatches on this file
+          });
+        }
       }
     } catch (modErr) {
       // eslint-disable-next-line no-console
