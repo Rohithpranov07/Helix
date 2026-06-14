@@ -119,6 +119,48 @@ helix/
 └── CLAUDE.md           # Operating contract (read every session)
 ```
 
+---
+
+## Contributors
+
+### Adithyan C S S
+**Core Engine · AI Integration · Orchestration**
+
+- Designed and implemented the **Immune System** organ — `repoScan`, `scanner`, `heal`, `patch`, `confirm`, `promote` — including the full red-team attack pipeline against ShopLite
+- Built the **Immune Memory** organ — `mintAntibody`, `matchAntibody`, `blockRecurrence` — with 1536-dim vector embeddings and Atlas `$vectorSearch` + in-memory cosine fallback
+- Integrated **Sarvam AI** as the primary cognition layer across all reasoning paths: patch synthesis, drift judgement, causal reconstruction, behaviour-equivalence judgement, and test/assertion generation
+- Implemented sovereign fallback (`HELIX_SOVEREIGN`) routing all AI ops to a local open-weight endpoint on Sarvam 402/429
+- Wired **n8n** reflex arcs: scan → heal loop, scheduled attack runs, and re-attack confirmation step
+- Authored `packages/engine/src/__tests__/` test suites for `capture`, `heal`, `mint`, `recall`, `patch`, `promote`, `scanner`
+
+---
+
+### Rohith Pranov V
+**Genome · Metabolism · Shadow Twin**
+
+- Designed and implemented the **Genome** organ — `captureIntent`, `pairIntent`, `repoDrift`, `seedShopLite` — including the double-strand intent ↔ implementation base-pairing model
+- Integrated **Gemini** `gemini-2.0-flash` as the perception layer for wide-context intent–code pairing across many files simultaneously and entropy field computation
+- Built the **Metabolism** organ — `measureEntropy`, `consolidate`, `repoMetabolism`, `temperature` — computing entropy across five dimensions (duplication, pattern variance, coupling, vuln density, comprehension) and projecting the rewrite-cliff timeline
+- Built and maintained the **Shadow twin** runtime (`shadow/docker-compose.yml`) — `spinShadow`, `applyToShadow`, `replayTraffic`, `verifyEquivalence` — enforcing the Shadow Invariant via `assertPromotable`
+- Authored GitHub OAuth integration (`packages/engine/src/genome/github.ts`) for repo drift monitoring
+- Authored `packages/engine/src/__tests__/` test suites for `consolidator`, `homeostasis`, `shadow`, `verify`, `pair`
+
+---
+
+### Santhosh Raja S
+**Nervous System · Governor · Control Plane · ShopLite**
+
+- Designed and implemented the **Nervous System** organ — `handleIncident`, `repoHeal`, `resolve`, railway deployment patch flow — including the Resurrection Reflex (rollback → causal reconstruction → heal in Shadow → promote, 71s user-facing impact)
+- Built the **Governor** organ — `checkHomeostasis` — tracking generation rate vs. repair rate and outputting `ok / reprioritise / gate` verdicts
+- Built the **Vital Signs** dashboard (`apps/web`) — Next.js 15 control plane with `/api/vitals`, live temperature display, genetic integrity %, immune status, heart rate, and lifeline projection
+- Built **ShopLite** (`apps/target`) — the vulnerable demo app with four precisely planted vulnerabilities (`SQLi`, `XSS`, `missingRLS`, `secretLeak`) and `vulns.manifest.json` ground truth
+- Wrote `scripts/setup.mjs`, `scripts/demo.mjs` (7-step guided demo), `scripts/n8n-sync.mjs`, and the `Makefile`
+- Authored `packages/db/` — all Mongoose models, Zod validators, repos, and vector index configuration
+- Authored `packages/shared/src/contracts.ts` and `types.ts` — the canonical type system used across all organs
+- Authored `packages/engine/src/__tests__/` test suites for `incident`, `incidentHeal`, `resolve`, `temperature`, `repoPatch`
+
+---
+
 ### MongoDB Collections
 
 | Collection | Purpose |
