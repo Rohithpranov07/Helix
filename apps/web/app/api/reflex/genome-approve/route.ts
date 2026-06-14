@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { GenomeApproveReqSchema } from "@helix/shared";
 import { genomeApprove } from "@helix/engine";
 
+export const maxDuration = 300;
+
 export async function POST(req: Request) {
   const body: unknown = await req.json().catch(() => null);
   const parsed = GenomeApproveReqSchema.safeParse(body);

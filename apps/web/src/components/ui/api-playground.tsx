@@ -1,0 +1,521 @@
+'use client'
+
+import React, { useState, useEffect, useRef } from 'react'
+import { ChevronDown, Plus, Trash2, Check } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { Input } from '@/components/ui/input'
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+} from "@/components/ui/resizable"
+import { cn } from '@/lib/utils'
+
+export type ScanMethod = 'SAST' | 'DAST' | 'SECRETS' | 'FULL' | 'CUSTOM'
+
+export interface Parameter {
+  id: string
+  key: string
+  value: string
+}
+
+export interface ScanConfig {
+  repoId: string
+  method: ScanMethod
+  rulesets: Parameter[]
+  ignorePaths: Parameter[]
+  branches: Parameter[]
+  custom: Parameter[]
+  rawResponse?: {
+    status?: string
+    data?: any
+    error?: string
+  }
+}
+
+export interface APITestResponse {
+  status?: string
+  data?: any
+  error?: string
+}
+
+export interface CleanScanConfig {
+  repoId: string
+  method: string
+  rulesets?: Omit<Parameter, 'id'>[]
+  ignorePaths?: Omit<Parameter, 'id'>[]
+  branches?: Omit<Parameter, 'id'>[]
+  custom?: Omit<Parameter, 'id'>[]
+}
+
+export interface ScanPreset {
+  name: string
+  config: Omit<ScanConfig, 'rawResponse'>
+}
+
+function titleCase(str: string) {
+  return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase()
+}
+
+type TabType = 'rulesets' | 'ignorePaths' | 'branches' | 'custom'
+
+interface APIPlaygroundProps {
+  config?: ScanConfig
+  onConfigChange?: (config: ScanConfig) => void
+  onTest?: (config: ScanConfig) => Promise<APITestResponse>
+  connections: string[] // List of "owner/repo" strings
+  scanning?: boolean
+}
+
+export function APIPlayground({
+  config: initialConfig,
+  onConfigChange,
+  onTest,
+  connections = [],
+  scanning = false
+}: APIPlaygroundProps) {
+  const [activeTab, setActiveTab] = useState<TabType>('rulesets')
+  const [config, setConfig] = useState<ScanConfig>(initialConfig || {
+    repoId: '',
+    method: 'SAST',
+    rulesets: [],
+    ignorePaths: [],
+    branches: [],
+    custom: [],
+    rawResponse: {}
+  })
+
+  useEffect(() => {
+    if (onConfigChange) {
+      onConfigChange(config)
+    }
+  }, [config, onConfigChange])
+
+  const updateConfig = <K extends keyof ScanConfig>(key: K, value: ScanConfig[K]) => {
+    setConfig(prev => {
+      return { ...prev, [key]: value }
+    })
+  }
+
+  const activeTabMap =
+    activeTab === 'rulesets' ? config.rulesets :
+    activeTab === 'ignorePaths' ? config.ignorePaths :
+    activeTab === 'branches' ? config.branches :
+    activeTab === 'custom' ? config.custom : []
+
+  const setRulesets = (rulesets: Parameter[]) => updateConfig('rulesets', rulesets)
+  const setIgnorePaths = (ignorePaths: Parameter[]) => updateConfig('ignorePaths', ignorePaths)
+  const setBranches = (branches: Parameter[]) => updateConfig('branches', branches)
+  const setCustom = (custom: Parameter[]) => updateConfig('custom', custom)
+
+  const map = { rulesets: setRulesets, ignorePaths: setIgnorePaths, branches: setBranches, custom: setCustom }
+
+  const updateActiveTabMapItem = (type: keyof typeof map, id: string, field: 'key' | 'value', value: string): void => {
+    const updatedSettingsConfig = config[type]?.map((item: Parameter) =>
+      item.id === id ? { ...item, [field]: value } : item
+    )
+    map[type](updatedSettingsConfig)
+  }
+
+  const addActiveTabMapItem = (type: keyof typeof map) => {
+    const newItem: Parameter = {
+      id: crypto.randomUUID(),
+      value: '',
+      key: ''
+    }
+    const updatedItems = [...(config[type] || []), newItem]
+    map[type](updatedItems)
+  }
+
+  const removeActiveTabMapItem = (type: keyof typeof map, itemId: string) => {
+    const filteredItems = config[type]?.filter((item: Parameter) => item.id !== itemId) || []
+    map[type](filteredItems)
+  }
+
+  const testApi = async () => {
+    if (!onTest) return
+    try {
+      const response = await onTest(config)
+      updateConfig('rawResponse', {
+        status: response.status || "Complete",
+        data: response.data || response,
+        ...(response.error !== undefined ? { error: response.error as string } : {})
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      updateConfig('rawResponse', {
+        error: message
+      })
+    }
+  }
+
+  const applyExampleConfig = (example: 'owasp' | 'secrets' | 'fast') => {
+    const preset = example === 'owasp' ? DUMMY_OWASP_CONFIG :
+                  example === 'secrets' ? DUMMY_SECRETS_CONFIG :
+                  DUMMY_FAST_CONFIG
+
+    setConfig({ ...preset.config, repoId: config.repoId })
+  }
+
+  // --- Animation State for Scanning Logs ---
+  const [logs, setLogs] = useState<string[]>([]);
+  const [elapsed, setElapsed] = useState(0);
+  const logsEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!scanning) {
+      setLogs([]);
+      setElapsed(0);
+      return;
+    }
+
+    const PHASE1_LOGS = [
+      "> Initializing secure sandbox...",
+      "> Mounting GitHub repository volume...",
+      "> Fetching branch metadata...",
+      "> Extracting deep dependency graph...",
+      "> Running pattern match on AST...",
+      "> Analyzing control flow paths...",
+      "> Taint analysis in progress...",
+      "> Checking for hardcoded secrets...",
+      "> Scanning for SQL injection vectors...",
+      "> Evaluating cross-site scripting risks...",
+      "> Compiling vulnerability report...",
+      "> Finalizing analysis...",
+    ];
+
+    const PHASE2_LOGS = [
+      "> Running Gemini wide-context analysis...",
+      "> Deep-scanning control flow paths...",
+      "> Checking injection sinks in request handlers...",
+      "> Mapping taint sources to vulnerable endpoints...",
+      "> Cross-referencing auth middleware chains...",
+      "> Evaluating RLS policy coverage...",
+      "> Running Sarvam patch synthesis...",
+      "> Generating minimal diffs for each finding...",
+      "> Verifying patches preserve original behaviour...",
+      "> Writing patches to shadow branch...",
+      "> Cross-checking antibody library for known patterns...",
+      "> Validating output schema...",
+    ];
+
+    let currentIndex = 0;
+    let phase2Index = 0;
+    let phase = 1;
+    setLogs([PHASE1_LOGS[0] ?? '']);
+
+    const interval = setInterval(() => {
+      if (phase === 1) {
+        currentIndex++;
+        if (currentIndex < PHASE1_LOGS.length) {
+          const next = PHASE1_LOGS[currentIndex];
+          if (next !== undefined) setLogs(prev => [...prev, next]);
+        } else {
+          phase = 2;
+        }
+      } else {
+        const next = PHASE2_LOGS[phase2Index % PHASE2_LOGS.length];
+        if (next !== undefined) setLogs(prev => [...prev, next]);
+        phase2Index++;
+      }
+    }, 600);
+
+    const timer = setInterval(() => setElapsed(s => s + 1), 1000);
+
+    return () => { clearInterval(interval); clearInterval(timer); };
+  }, [scanning]);
+
+  useEffect(() => {
+    logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [logs]);
+
+  const getCleanConfig = (): CleanScanConfig => {
+    const clean: CleanScanConfig = {
+      repoId: config.repoId,
+      method: config.method
+    }
+
+    if (config.rulesets?.length > 0) {
+      clean.rulesets = config.rulesets.map(h => ({ key: h.key, value: h.value }))
+    }
+    if (config.ignorePaths?.length > 0) {
+      clean.ignorePaths = config.ignorePaths.map(q => ({ key: q.key, value: q.value }))
+    }
+    if (config.branches?.length > 0) {
+      clean.branches = config.branches.map(p => ({ key: p.key, value: p.value }))
+    }
+    if (config.custom?.length > 0) {
+      clean.custom = config.custom.map(b => ({ key: b.key, value: b.value }))
+    }
+
+    return clean
+  }
+
+  return (
+    <ResizablePanelGroup orientation="horizontal" className="h-full gap-4 bg-[#09090b]">
+      {/* Left side - Configuration */}
+      <ResizablePanel defaultSize={66} minSize={50}>
+        <div className="flex flex-col gap-4 h-full p-6 bg-[#18181b] rounded-lg shadow-sm border border-[#27272a]">
+          <div className="flex flex-col sm:flex-row gap-3">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="w-full sm:w-[110px] justify-between bg-[#09090b] border-[#27272a] text-white hover:bg-[#27272a] hover:text-white">
+                  {config.method}
+                  <ChevronDown className="h-4 w-4 ml-2" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="bg-[#09090b] border-[#27272a] text-white">
+                {['SAST', 'DAST', 'SECRETS', 'FULL', 'CUSTOM'].map((method) => (
+                  <DropdownMenuItem
+                    key={method}
+                    onClick={() => updateConfig('method', method as ScanMethod)}
+                    className="focus:bg-[#27272a] focus:text-white"
+                  >
+                    <div className="flex items-center">
+                      {method}
+                      {config.method === method && (
+                        <Check className="ml-2 h-4 w-4" />
+                      )}
+                    </div>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            
+            <select
+              value={config.repoId}
+              onChange={(e) => updateConfig('repoId', e.target.value)}
+              className="flex-1 h-10 bg-[#09090b] text-white border border-[#27272a] rounded-md px-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 appearance-none"
+            >
+              <option value="" disabled className="text-[#a1a1aa]">Select GitHub Repository...</option>
+              {connections.map(c => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex gap-1 border-b border-[#27272a]">
+            {[
+              { value: 'rulesets', label: 'Rulesets', supportedTab: ['SAST', 'DAST', 'SECRETS', 'FULL', 'CUSTOM'] },
+              { value: 'ignorePaths', label: 'Ignore Paths', supportedTab: ['SAST', 'DAST', 'SECRETS', 'FULL', 'CUSTOM'] },
+              { value: 'branches', label: 'Branches', supportedTab: ['SAST', 'DAST', 'SECRETS', 'FULL', 'CUSTOM'] },
+              { value: 'custom', label: 'Custom Config', supportedTab: ['CUSTOM'] }
+            ]
+              .filter((t) => t.supportedTab.includes(config.method))
+              .map((t) => (
+                <button
+                  key={t.value}
+                  onClick={() => setActiveTab(t.value as TabType)}
+                  className={cn(
+                    'px-4 py-3 text-sm font-medium border-b-2 -mb-[2px] transition-colors rounded-t-md',
+                    activeTab === t.value
+                      ? 'border-[#3b82f6] text-white'
+                      : 'border-transparent text-[#a1a1aa] hover:text-white'
+                  )}
+                >
+                  {t.label}
+                </button>
+              ))}
+          </div>
+
+          <div className="flex-1 overflow-y-auto py-4">
+            <div className="space-y-3">
+              {activeTabMap?.map((activeTabMapItem: Parameter) => (
+                <div key={activeTabMapItem.id} className="flex items-center gap-3">
+                  <Input
+                    placeholder="Key"
+                    className="flex-1 h-10 bg-[#09090b] text-white placeholder-[#a1a1aa] border border-[#27272a] rounded-md px-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                    value={activeTabMapItem.key}
+                    onChange={(e) => updateActiveTabMapItem(activeTab as keyof typeof map, activeTabMapItem.id, 'key', e.target.value)}
+                  />
+                  <Input
+                    placeholder="Value"
+                    className="flex-1 h-10 bg-[#09090b] text-white placeholder-[#a1a1aa] border border-[#27272a] rounded-md px-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                    value={activeTabMapItem.value}
+                    onChange={(e) => updateActiveTabMapItem(activeTab as keyof typeof map, activeTabMapItem.id, 'value', e.target.value)}
+                  />
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-10 w-10 rounded-md border border-[#ef4444]/30 text-[#ef4444] hover:bg-[#ef4444]/10 transition-colors flex-shrink-0"
+                    onClick={() => removeActiveTabMapItem(activeTab as keyof typeof map, activeTabMapItem.id)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-4 h-10 bg-[#09090b] border-[#27272a] text-white hover:bg-[#27272a] hover:text-white"
+                onClick={() => addActiveTabMapItem(activeTab as keyof typeof map)}
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add {activeTab === 'ignorePaths' ? 'Path' : activeTab === 'branches' ? 'Branch' : titleCase(activeTab)}
+              </Button>
+            </div>
+          </div>
+
+          <div className="flex gap-3 pt-6 border-t border-[#27272a]">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button disabled={scanning} variant="outline" size="sm" className="h-10 bg-[#09090b] border-[#27272a] text-white hover:bg-[#27272a] hover:text-white">
+                  Presets
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="bg-[#09090b] border-[#27272a] text-white">
+                <DropdownMenuItem className="focus:bg-[#27272a] focus:text-white" onClick={() => applyExampleConfig('owasp')}>OWASP Top 10 Audit</DropdownMenuItem>
+                <DropdownMenuItem className="focus:bg-[#27272a] focus:text-white" onClick={() => applyExampleConfig('secrets')}>Deep Secrets Scan</DropdownMenuItem>
+                <DropdownMenuItem className="focus:bg-[#27272a] focus:text-white" onClick={() => applyExampleConfig('fast')}>Fast SAST</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button
+              onClick={testApi}
+              disabled={!config.repoId?.trim() || scanning}
+              size="sm"
+              className="h-10 px-6 bg-[#52525b] text-white hover:bg-[#3f3f46] border-none"
+            >
+              {scanning ? `Scanning… ${elapsed}s` : '▶ Run Security Scan'}
+            </Button>
+          </div>
+        </div>
+      </ResizablePanel>
+
+      <ResizableHandle withHandle className="bg-transparent" />
+
+      {/* Right side - JSON preview */}
+      <ResizablePanel defaultSize={34} minSize={25}>
+        <div className="h-full">
+          <ResizablePanelGroup orientation="vertical" className="gap-4 bg-[#09090b]">
+            {/* Configuration JSON - Top Half */}
+            <ResizablePanel defaultSize={50} minSize={30}>
+              <div className="h-full bg-[#18181b] rounded-lg shadow-sm border border-[#27272a]">
+                <div className="p-4 h-full flex flex-col">
+                  <h3 className="text-sm font-semibold mb-3 text-white border-b border-[#27272a] pb-2 flex items-center justify-between">
+                    <span>{scanning ? 'Live Analysis' : 'Scan Configuration'}</span>
+                    {scanning && (
+                      <span className="text-[#10b981] text-xs font-mono tabular-nums">
+                        {String(Math.floor(elapsed / 60)).padStart(2, '0')}:{String(elapsed % 60).padStart(2, '0')}
+                      </span>
+                    )}
+                  </h3>
+                  <div className="overflow-auto flex-1 bg-[#09090b] rounded-lg p-4 font-mono text-xs relative">
+                    {scanning ? (
+                      <div className="flex flex-col gap-2">
+                        {logs.map((log, i) => (
+                          <div
+                            key={i}
+                            className="text-[#10b981] animate-in fade-in slide-in-from-bottom-2"
+                            style={{ animationDuration: '300ms' }}
+                          >
+                            {log}
+                          </div>
+                        ))}
+                        <div className="flex gap-1 items-center mt-2 text-[#10b981]">
+                          <span>&gt;</span>
+                          <span className="w-2 h-4 bg-[#10b981] animate-pulse"></span>
+                        </div>
+                        <div ref={logsEndRef} />
+                        {/* Scan Line Overlay */}
+                        <div className="absolute inset-0 pointer-events-none bg-gradient-to-b from-transparent via-[#10b981]/10 to-transparent h-20 w-full animate-[scan_2s_ease-in-out_infinite]" />
+                        <style dangerouslySetInnerHTML={{__html: `
+                          @keyframes scan {
+                            0% { transform: translateY(-100%); }
+                            100% { transform: translateY(500px); }
+                          }
+                        `}} />
+                      </div>
+                    ) : (
+                      <pre className="text-[#e4e4e7]">
+                        {JSON.stringify(getCleanConfig(), null, 2)}
+                      </pre>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </ResizablePanel>
+
+            {/* Response JSON - Bottom Half */}
+            {config.rawResponse && (
+              <>
+                <ResizableHandle withHandle className="bg-transparent" />
+                <ResizablePanel defaultSize={50} minSize={30}>
+                  <div className="h-full bg-[#18181b] rounded-lg shadow-sm border border-[#27272a]">
+                    <div className="p-4 h-full flex flex-col">
+                      <h3 className="text-sm font-semibold mb-3 text-white border-b border-[#27272a] pb-2">Scan Findings</h3>
+                      <pre className="text-xs overflow-auto flex-1 bg-[#09090b] rounded-lg p-4 font-mono">
+                        {config.rawResponse.error ? (
+                          <span className="text-[#ef4444] font-medium">{config.rawResponse.error}</span>
+                        ) : (
+                          <span className="text-[#e4e4e7]">{JSON.stringify(config.rawResponse.data, null, 2)}</span>
+                        )}
+                      </pre>
+                    </div>
+                  </div>
+                </ResizablePanel>
+              </>
+            )}
+          </ResizablePanelGroup>
+        </div>
+      </ResizablePanel>
+    </ResizablePanelGroup>
+  )
+}
+
+const DUMMY_OWASP_CONFIG: Omit<ScanPreset, 'tool_type'> = {
+  name: 'owasp_audit',
+  config: {
+    repoId: '',
+    method: 'FULL',
+    rulesets: [
+      { id: 'rs-1', key: 'Injection', value: 'Enabled' },
+      { id: 'rs-2', key: 'BrokenAuth', value: 'Enabled' },
+      { id: 'rs-3', key: 'XSS', value: 'Enabled' }
+    ],
+    ignorePaths: [
+      { id: 'ip-1', key: 'tests/', value: 'true' },
+      { id: 'ip-2', key: 'docs/', value: 'true' }
+    ],
+    branches: [
+      { id: 'b-1', key: 'main', value: 'true' }
+    ],
+    custom: []
+  }
+}
+
+const DUMMY_SECRETS_CONFIG: Omit<ScanPreset, 'tool_type'> = {
+  name: 'deep_secrets',
+  config: {
+    repoId: '',
+    method: 'SECRETS',
+    rulesets: [
+      { id: 'rs-1', key: 'AWSKeys', value: 'Enabled' },
+      { id: 'rs-2', key: 'StripeTokens', value: 'Enabled' },
+      { id: 'rs-3', key: 'DBPasswords', value: 'Enabled' }
+    ],
+    ignorePaths: [],
+    branches: [
+      { id: 'b-1', key: '*', value: 'true' }
+    ],
+    custom: []
+  }
+}
+
+const DUMMY_FAST_CONFIG: Omit<ScanPreset, 'tool_type'> = {
+  name: 'fast_sast',
+  config: {
+    repoId: '',
+    method: 'SAST',
+    rulesets: [
+      { id: 'rs-1', key: 'HighSeverityOnly', value: 'Enabled' }
+    ],
+    ignorePaths: [
+      { id: 'ip-1', key: 'node_modules/', value: 'true' }
+    ],
+    branches: [
+      { id: 'b-1', key: 'develop', value: 'true' }
+    ],
+    custom: []
+  }
+}

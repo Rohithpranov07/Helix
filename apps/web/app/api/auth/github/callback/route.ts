@@ -12,7 +12,7 @@ export async function GET(request: Request) {
   const stateB64 = searchParams.get("state") ?? "";
 
   if (!code) {
-    return NextResponse.redirect(`${origin}/?error=github_oauth_cancelled`);
+    return NextResponse.redirect(`${origin}/dashboard/genome?error=${encodeURIComponent("GitHub authorization was cancelled. Please try again.")}`);
   }
 
   const clientId = process.env["GITHUB_CLIENT_ID"];
@@ -36,7 +36,7 @@ export async function GET(request: Request) {
     owner = state.owner ?? "";
     repo = state.repo ?? "";
   } catch {
-    return NextResponse.redirect(`${origin}/?error=invalid_oauth_state`);
+    return NextResponse.redirect(`${origin}/dashboard/genome?error=${encodeURIComponent("Invalid OAuth state. Please try connecting again.")}`);
   }
 
   try {
@@ -45,31 +45,50 @@ export async function GET(request: Request) {
     );
     const token = await exchangeCode(clientId, clientSecret, code);
 
-    // Get authenticated user (validates token + provides login for owner fallback)
     const user = await getAuthenticatedUser(token);
     const effectiveOwner = owner || user.login;
     const effectiveRepo = repo || effectiveOwner;
 
-    // Get repo info (default branch)
     const repoInfo = await getRepo(token, effectiveOwner, effectiveRepo);
 
-    // Persist connection
-    await connectDb();
-    await upsertGitHubConnection({
-      owner: effectiveOwner,
-      repo: effectiveRepo,
-      accessToken: token,
-      defaultBranch: repoInfo.default_branch,
-      connectedAt: new Date().toISOString(),
-    });
+    // Persist connection — non-fatal: auth succeeds even if DB is unavailable
+    try {
+      await connectDb();
+      await upsertGitHubConnection({
+        owner: effectiveOwner,
+        repo: effectiveRepo,
+        accessToken: token,
+        defaultBranch: repoInfo.default_branch,
+        connectedAt: new Date().toISOString(),
+      });
+    } catch (dbErr) {
+      console.error("[HELIX] DB save failed (non-fatal):", dbErr);
+    }
 
     return NextResponse.redirect(
-      `${origin}/?github_connected=${encodeURIComponent(`${effectiveOwner}/${effectiveRepo}`)}`,
+      `${origin}/dashboard/genome?github_connected=${encodeURIComponent(`${effectiveOwner}/${effectiveRepo}`)}`,
     );
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
+    const raw = err instanceof Error ? err.message : String(err);
+    console.error("[HELIX] GitHub OAuth callback error:", raw);
+    const friendly = friendlyGitHubError(raw, owner, repo);
     return NextResponse.redirect(
-      `${origin}/?error=${encodeURIComponent(msg.slice(0, 200))}`,
+      `${origin}/dashboard/genome?error=${encodeURIComponent(friendly)}`,
     );
   }
+}
+
+function friendlyGitHubError(raw: string, owner: string, repo: string): string {
+  if (raw.includes("404"))
+    return `Repository "${owner}/${repo}" not found. Check the URL and make sure it exists and you have access.`;
+  if (raw.includes("401") || raw.includes("Bad credentials") || raw.includes("bad_verification_code"))
+    return "GitHub authorization failed — the code may have expired. Please try connecting again.";
+  if (raw.includes("403"))
+    return `Access denied to "${owner}/${repo}". Make sure you granted the required permissions.`;
+  if (raw.includes("GITHUB_CLIENT"))
+    return "Server configuration error — GITHUB_CLIENT_ID or SECRET not set.";
+  if (raw.includes("OAuth failed"))
+    return "GitHub OAuth failed. Please try connecting again.";
+  // Surface the raw message in dev so it's visible in the UI
+  return `Connection error: ${raw.slice(0, 120)}`;
 }

@@ -23,8 +23,9 @@ import { readFileSync, existsSync } from "fs";
 import { resolve } from "path";
 import { ValidationError, type IntentStrand, type ShadowProof, type VulnClass } from "@helix/shared";
 import { gemini, sarvam } from "@helix/ai";
-import { connectDb, listIntentStrands, updateIntentStrand } from "@helix/db";
+import { connectDb, listIntentStrands, updateIntentStrand, findGitHubConnection } from "@helix/db";
 import type { HelixDoc } from "@helix/db";
+import { getRepoTree, readFile as ghReadFile } from "./github.js";
 
 // packages/engine/src/genome/ → 4 levels up = repo root
 const REPO_ROOT = resolve(__dirname, "../../../../");
@@ -273,12 +274,40 @@ export async function pairGenome(
     );
   }
 
-  // Read the source file from disk.
-  const absPath = resolve(REPO_ROOT, moduleId);
-  if (!existsSync(absPath)) {
-    throw new ValidationError(`pairGenome: module file not found at ${absPath}.`);
+  // Read module source — GitHub-indexed strands have moduleId "owner/repo/module".
+  // Local strands (apps/target/...) are read from disk.
+  let code: string;
+  const ghMatch = moduleId.match(/^([^/]+)\/([^/]+)\/(.+)$/);
+  const localPath = resolve(REPO_ROOT, moduleId);
+  if (ghMatch && !existsSync(localPath)) {
+    const [, owner, repo, modName] = ghMatch as [string, string, string, string];
+    const conn = await findGitHubConnection(owner, repo);
+    if (!conn) {
+      throw new ValidationError(
+        `pairGenome: GitHub strand "${moduleId}" has no OAuth connection. Connect the repo first.`,
+      );
+    }
+    const tree = await getRepoTree(conn.accessToken, owner, repo);
+    const moduleFiles = tree.filter(
+      (f) => f.path === modName || f.path.startsWith(`${modName}/`),
+    );
+    if (moduleFiles.length === 0) {
+      throw new ValidationError(
+        `pairGenome: no files found for module "${modName}" in ${owner}/${repo}.`,
+      );
+    }
+    const parts: string[] = [];
+    for (const entry of moduleFiles.slice(0, 20)) {
+      const file = await ghReadFile(conn.accessToken, owner, repo, entry.path);
+      if (file) parts.push(`// ${entry.path}\n${file.content}`);
+    }
+    code = parts.join("\n\n");
+  } else {
+    if (!existsSync(localPath)) {
+      throw new ValidationError(`pairGenome: module file not found at ${localPath}.`);
+    }
+    code = readFileSync(localPath, "utf8");
   }
-  const code = readFileSync(absPath, "utf8");
 
   // Gemini base-pair analysis (wide-context — Gemini is correct here per CLAUDE.md).
   const analyze = deps?.analyze ?? geminiAnalyze;

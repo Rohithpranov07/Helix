@@ -217,6 +217,7 @@ export async function indexGitHubRepo(
     strands.push(strandDoc);
     } catch (modErr) {
       // Log but don't abort — one bad module shouldn't kill the full index run
+      // eslint-disable-next-line no-console
       console.warn(`[genome/index] skipping module ${modName}:`, modErr instanceof Error ? modErr.message : modErr);
     }
   }

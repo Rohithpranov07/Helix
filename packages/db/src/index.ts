@@ -80,3 +80,27 @@ export {
   updateDriftReport,
   listDriftReports,
 } from "./repos/driftReport.js";
+
+export { IncidentPatchModel } from "./models/incidentPatch.js";
+export {
+  createIncidentPatch,
+  findIncidentPatchByPatchId,
+  updateIncidentPatch,
+  listIncidentPatches,
+} from "./repos/incidentPatch.js";
+
+export { ImmuneScanRunModel } from "./models/immuneScanRun.js";
+export {
+  createImmuneScanRun,
+  findImmuneScanRunByScanId,
+  updateImmuneScanRun,
+  listImmuneScanRuns,
+} from "./repos/immuneScanRun.js";
+
+export { MetabolismRunModel } from "./models/metabolismRun.js";
+export {
+  createMetabolismRun,
+  findMetabolismRunByRunId,
+  updateMetabolismRun,
+  listMetabolismRuns,
+} from "./repos/metabolismRun.js";

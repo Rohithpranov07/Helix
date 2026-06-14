@@ -229,6 +229,229 @@ export type GenomeRejectRes = z.infer<typeof GenomeRejectResSchema>;
 
 export { DriftMismatchSchema, DriftReportSchema, DriftStatusSchema };
 
+// ── Immune System repo-aware scan + patch contracts ──────────────────────────
+
+const ImmunePatchStatusSchema = z.enum([
+  "pending_approval", "approved", "rejected", "pr_created",
+]);
+
+const ImmuneFindingSchema = z.object({
+  vulnClass: VulnClassSchema,
+  endpoint: z.string(),
+  evidence: z.string(),
+  affectedFile: z.string(),
+  diff: z.string(),
+  newContent: z.string(),
+});
+
+const ImmuneScanRunSchema = z.object({
+  scanId: z.string(),
+  githubOwner: z.string(),
+  githubRepo: z.string(),
+  shadowBranch: z.string(),
+  scannedAt: z.string(),
+  findings: z.array(ImmuneFindingSchema),
+  status: ImmunePatchStatusSchema,
+  prUrl: z.string().optional(),
+  prNumber: z.number().optional(),
+});
+
+// immune.scan  — static analysis scan + patch synthesis for a connected repo
+export const ImmuneScanReqSchema = z.object({
+  githubOwner: z.string().min(1),
+  githubRepo: z.string().min(1),
+});
+export const ImmuneScanResSchema = z.object({ scan: ImmuneScanRunSchema });
+export type ImmuneScanReq = z.infer<typeof ImmuneScanReqSchema>;
+export type ImmuneScanRes = z.infer<typeof ImmuneScanResSchema>;
+
+// immune.patches  — list scan runs
+export const ImmuneListReqSchema = z.object({
+  githubOwner: z.string().optional(),
+  githubRepo: z.string().optional(),
+  status: ImmunePatchStatusSchema.optional(),
+});
+export const ImmuneListResSchema = z.object({ scans: z.array(ImmuneScanRunSchema) });
+export type ImmuneListReq = z.infer<typeof ImmuneListReqSchema>;
+export type ImmuneListRes = z.infer<typeof ImmuneListResSchema>;
+
+// immune.approve  — human approves → writes files to shadow branch → PR → mint antibodies
+export const ImmuneApproveReqSchema = z.object({ scanId: z.string().min(1) });
+export const ImmuneApproveResSchema = z.object({
+  prUrl: z.string(),
+  prNumber: z.number(),
+  scan: ImmuneScanRunSchema,
+});
+export type ImmuneApproveReq = z.infer<typeof ImmuneApproveReqSchema>;
+export type ImmuneApproveRes = z.infer<typeof ImmuneApproveResSchema>;
+
+// immune.reject  — human rejects
+export const ImmuneRejectReqSchema = z.object({ scanId: z.string().min(1) });
+export const ImmuneRejectResSchema = z.object({ scanId: z.string(), status: ImmunePatchStatusSchema });
+export type ImmuneRejectReq = z.infer<typeof ImmuneRejectReqSchema>;
+export type ImmuneRejectRes = z.infer<typeof ImmuneRejectResSchema>;
+
+export { ImmuneScanRunSchema, ImmuneFindingSchema, ImmunePatchStatusSchema };
+
+// ── Nervous System Railway Patch contracts ────────────────────────────────────
+
+const IncidentPatchStatusSchema = z.enum([
+  "pending_approval", "approved", "rejected", "pr_created",
+]);
+
+const IncidentPatchFileSchema = z.object({
+  path: z.string(),
+  diff: z.string(),
+  newContent: z.string(),
+});
+
+const IncidentPatchSchema = z.object({
+  patchId: z.string(),
+  incidentId: z.string(),
+  githubOwner: z.string(),
+  githubRepo: z.string(),
+  railwayProjectId: z.string(),
+  railwayDeploymentId: z.string(),
+  deploymentStatus: z.string(),
+  shadowBranch: z.string(),
+  detectedAt: z.string(),
+  failureSummary: z.string(),
+  causalChain: z.array(CausalStepSchema),
+  files: z.array(IncidentPatchFileSchema),
+  status: IncidentPatchStatusSchema,
+  prUrl: z.string().optional(),
+  prNumber: z.number().optional(),
+});
+
+// railway.projects  — list Railway projects visible to the token
+export const RailwayProjectsReqSchema = z.object({});
+export const RailwayProjectsResSchema = z.object({
+  projects: z.array(z.object({
+    id: z.string(),
+    name: z.string(),
+  })),
+});
+export type RailwayProjectsReq = z.infer<typeof RailwayProjectsReqSchema>;
+export type RailwayProjectsRes = z.infer<typeof RailwayProjectsResSchema>;
+
+// railway.check  — detect latest failed deployment and synthesize patch
+export const RailwayCheckReqSchema = z.object({
+  projectId: z.string().min(1),
+  githubOwner: z.string().min(1),
+  githubRepo: z.string().min(1),
+});
+export const RailwayCheckResSchema = z.object({
+  patch: IncidentPatchSchema,
+});
+export type RailwayCheckReq = z.infer<typeof RailwayCheckReqSchema>;
+export type RailwayCheckRes = z.infer<typeof RailwayCheckResSchema>;
+
+// incident.patches  — list incident patches (optionally filtered)
+export const IncidentPatchesReqSchema = z.object({
+  githubOwner: z.string().optional(),
+  githubRepo: z.string().optional(),
+  status: IncidentPatchStatusSchema.optional(),
+});
+export const IncidentPatchesResSchema = z.object({
+  patches: z.array(IncidentPatchSchema),
+});
+export type IncidentPatchesReq = z.infer<typeof IncidentPatchesReqSchema>;
+export type IncidentPatchesRes = z.infer<typeof IncidentPatchesResSchema>;
+
+// incident.approve  — human approves → writes files to shadow branch → opens PR
+export const IncidentApproveReqSchema = z.object({ patchId: z.string().min(1) });
+export const IncidentApproveResSchema = z.object({
+  prUrl: z.string(),
+  prNumber: z.number(),
+  patch: IncidentPatchSchema,
+});
+export type IncidentApproveReq = z.infer<typeof IncidentApproveReqSchema>;
+export type IncidentApproveRes = z.infer<typeof IncidentApproveResSchema>;
+
+// incident.reject  — human rejects a patch
+export const IncidentRejectReqSchema = z.object({ patchId: z.string().min(1) });
+export const IncidentRejectResSchema = z.object({
+  patchId: z.string(),
+  status: IncidentPatchStatusSchema,
+});
+export type IncidentRejectReq = z.infer<typeof IncidentRejectReqSchema>;
+export type IncidentRejectRes = z.infer<typeof IncidentRejectResSchema>;
+
+export { IncidentPatchSchema, IncidentPatchStatusSchema, IncidentPatchFileSchema };
+
+// ── Metabolism GitHub repo-aware entropy digestion contracts ─────────────────
+
+const MetabolismStatusSchema = z.enum(["pending_approval", "approved", "rejected", "pr_created"]);
+
+const MetabolismEnzymeSchema = z.object({
+  enzymeType: z.enum(["consolidator", "normaliser", "annealer"]),
+  targetZone: z.string(),
+  rationale: z.string(),
+  diff: z.string(),
+  newContent: z.string(),
+});
+
+const MetabolismRunSchema = z.object({
+  runId: z.string(),
+  githubOwner: z.string(),
+  githubRepo: z.string(),
+  shadowBranch: z.string(),
+  measuredAt: z.string(),
+  temperature: z.number(),
+  dims: z.object({
+    duplication: z.number(),
+    patternVariance: z.number(),
+    coupling: z.number(),
+    vulnDensity: z.number(),
+    comprehension: z.number(),
+  }),
+  projectedRewriteWeeks: z.number(),
+  enzymes: z.array(MetabolismEnzymeSchema),
+  status: MetabolismStatusSchema,
+  prUrl: z.string().optional(),
+  prNumber: z.number().optional(),
+});
+
+// metabolism.scan
+export const MetabolismScanReqSchema = z.object({
+  githubOwner: z.string().min(1),
+  githubRepo: z.string().min(1),
+});
+export const MetabolismScanResSchema = z.object({ run: MetabolismRunSchema });
+export type MetabolismScanReq = z.infer<typeof MetabolismScanReqSchema>;
+export type MetabolismScanRes = z.infer<typeof MetabolismScanResSchema>;
+
+// metabolism.list
+export const MetabolismListReqSchema = z.object({
+  githubOwner: z.string().optional(),
+  githubRepo: z.string().optional(),
+  status: MetabolismStatusSchema.optional(),
+});
+export const MetabolismListResSchema = z.object({ runs: z.array(MetabolismRunSchema) });
+export type MetabolismListReq = z.infer<typeof MetabolismListReqSchema>;
+export type MetabolismListRes = z.infer<typeof MetabolismListResSchema>;
+
+// metabolism.approve
+export const MetabolismApproveReqSchema = z.object({ runId: z.string().min(1) });
+export const MetabolismApproveResSchema = z.object({
+  prUrl: z.string(),
+  prNumber: z.number(),
+  run: MetabolismRunSchema,
+});
+export type MetabolismApproveReq = z.infer<typeof MetabolismApproveReqSchema>;
+export type MetabolismApproveRes = z.infer<typeof MetabolismApproveResSchema>;
+
+// metabolism.reject
+export const MetabolismRejectReqSchema = z.object({ runId: z.string().min(1) });
+export const MetabolismRejectResSchema = z.object({
+  runId: z.string(),
+  status: MetabolismStatusSchema,
+});
+export type MetabolismRejectReq = z.infer<typeof MetabolismRejectReqSchema>;
+export type MetabolismRejectRes = z.infer<typeof MetabolismRejectResSchema>;
+
+export { MetabolismRunSchema, MetabolismStatusSchema, MetabolismEnzymeSchema };
+
 // re-export sub-schemas for use in other packages
 export {
   VulnClassSchema,

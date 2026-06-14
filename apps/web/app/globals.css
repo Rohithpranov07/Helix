@@ -1,5 +1,265 @@
 @import "tailwindcss";
 
+@theme inline {
+  --radius-full: 999px;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   COSMIC PARALLAX BACKGROUND — keyframes + component classes
+   ═══════════════════════════════════════════════════════════ */
+
+:root {
+  --animation-iteration: infinite;
+}
+
+/* ── Stars animation ─────────────────────────────────────── */
+@keyframes animStar {
+  from { transform: translateY(0px); }
+  to   { transform: translateY(-2000px); }
+}
+
+/* ── Title entrance (one-shot decode) ────────────────────── */
+@keyframes titleDecode {
+  0% {
+    opacity: 0;
+    filter: blur(48px);
+    letter-spacing: 0.9em;
+    padding-left: 0.9em;
+  }
+  100% {
+    opacity: 1;
+    filter: blur(0px);
+    letter-spacing: 0.5em;
+    padding-left: 0.5em;
+  }
+}
+
+/* ── Subtitle — blur-cascade (staggered, loop) ────────────── */
+@keyframes blurWord1 {
+  0%           { opacity: 0; filter: blur(12px); transform: translateY(18px); }
+  10%          { opacity: 1; filter: blur(0);    transform: translateY(0); }
+  70%          { opacity: 1; filter: blur(0);    transform: translateY(0); }
+  85%, 100%    { opacity: 0; filter: blur(8px);  transform: translateY(-12px); }
+}
+
+@keyframes blurWord2 {
+  0%, 8%       { opacity: 0; filter: blur(12px); transform: translateY(18px); }
+  18%          { opacity: 1; filter: blur(0);    transform: translateY(0); }
+  70%          { opacity: 1; filter: blur(0);    transform: translateY(0); }
+  85%, 100%    { opacity: 0; filter: blur(8px);  transform: translateY(-12px); }
+}
+
+@keyframes blurWord3 {
+  0%, 16%      { opacity: 0; filter: blur(12px); transform: translateY(18px); }
+  26%          { opacity: 1; filter: blur(0);    transform: translateY(0); }
+  70%          { opacity: 1; filter: blur(0);    transform: translateY(0); }
+  85%, 100%    { opacity: 0; filter: blur(8px);  transform: translateY(-12px); }
+}
+
+@keyframes blurWord4 {
+  0%, 24%      { opacity: 0; filter: blur(12px); transform: translateY(18px); }
+  34%          { opacity: 1; filter: blur(0);    transform: translateY(0); }
+  70%          { opacity: 1; filter: blur(0);    transform: translateY(0); }
+  85%, 100%    { opacity: 0; filter: blur(8px);  transform: translateY(-12px); }
+}
+
+/* ── Ticker scroll ────────────────────────────────────────── */
+@keyframes animTicker {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+.helix-ticker {
+  display: flex;
+  width: max-content;
+  animation: animTicker 50s linear infinite;
+}
+
+/* ── Container ────────────────────────────────────────────── */
+.cosmic-parallax-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(ellipse at bottom, #1b2735 0%, #090a0f 100%);
+  overflow: hidden;
+  /* Isolate repaints to this subtree */
+  contain: strict;
+  will-change: auto;
+}
+
+/* ── Star layers ─────────────────────────────────────────── */
+.cosmic-stars,
+.cosmic-stars-medium,
+.cosmic-stars-large {
+  position: absolute;
+  top: 0;
+  left: 0;
+  background: transparent;
+  /* Promote to own compositor layer — animation runs off main thread */
+  will-change: transform;
+  backface-visibility: hidden;
+  transform: translateZ(0);
+}
+
+.cosmic-stars {
+  width: 1px;
+  height: 1px;
+  animation: animStar 50s linear var(--animation-iteration);
+}
+.cosmic-stars::after {
+  content: " ";
+  position: absolute;
+  top: 2000px;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  background: transparent;
+  box-shadow: inherit;
+}
+
+.cosmic-stars-medium {
+  width: 2px;
+  height: 2px;
+  animation: animStar 100s linear var(--animation-iteration);
+}
+.cosmic-stars-medium::after {
+  content: " ";
+  position: absolute;
+  top: 2000px;
+  left: 0;
+  width: 2px;
+  height: 2px;
+  background: transparent;
+  box-shadow: inherit;
+}
+
+.cosmic-stars-large {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  animation: animStar 150s linear var(--animation-iteration);
+}
+.cosmic-stars-large::after {
+  content: " ";
+  position: absolute;
+  top: 2000px;
+  left: 0;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: transparent;
+  box-shadow: inherit;
+}
+
+/* ── Horizon ──────────────────────────────────────────────── */
+#horizon {
+  display: none;
+}
+
+.glow {
+  position: absolute;
+  bottom: -100px;
+  left: 0;
+  width: 100%;
+  height: 100px;
+  background: linear-gradient(to top, rgba(80, 130, 255, 0.12), transparent);
+}
+
+/* ── Earth ────────────────────────────────────────────────── */
+#earth {
+  position: absolute;
+  bottom: calc(46% - 1500px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 2200px;
+  height: 1500px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse at 50% 0%, #1e3a60 0%, #0c1f3a 30%, #040c1a 65%, #010408 100%);
+  border: 1.5px solid rgba(120, 170, 255, 0.25);
+  box-shadow:
+    0 0 0 1px rgba(100, 160, 255, 0.08),
+    0 0 40px  rgba(80, 140, 255, 0.55),
+    0 0 100px rgba(60, 120, 255, 0.35),
+    0 0 200px rgba(40, 100, 255, 0.2),
+    0 0 350px rgba(30, 80, 220, 0.12),
+    inset 0 0 150px rgba(0, 0, 0, 0.98);
+  z-index: 1;
+}
+
+/* ── Title ────────────────────────────────────────────────── */
+#title {
+  position: absolute;
+  top: 28%;
+  left: 0;
+  right: 0;
+  z-index: 3;
+  text-align: center;
+  font-size: clamp(3rem, 10vw, 7rem);
+  font-weight: 900;
+  color: #ffffff;
+  letter-spacing: 0.5em;
+  padding-left: 0.5em;
+  text-shadow: none;
+  pointer-events: none;
+  user-select: none;
+  animation: titleDecode 1.4s cubic-bezier(0.16, 1, 0.3, 1) 0.2s both;
+  animation-iteration-count: 1;
+}
+
+/* ── Subtitle — sits on the sphere surface ────────────────── */
+#subtitle {
+  position: absolute;
+  top: 67%;
+  left: 0;
+  right: 0;
+  z-index: 3;
+  text-align: center;
+  font-size: clamp(0.6rem, 1.4vw, 0.85rem);
+  font-weight: 300;
+  color: rgba(180, 210, 255, 0.6);
+  letter-spacing: 0.45em;
+  pointer-events: none;
+  user-select: none;
+}
+
+.subtitle-part-1 {
+  display: inline-block;
+  will-change: transform, opacity, filter;
+  animation: blurWord1 10s cubic-bezier(0.16, 1, 0.3, 1) var(--animation-iteration);
+}
+.subtitle-part-2 {
+  display: inline-block;
+  will-change: transform, opacity, filter;
+  animation: blurWord2 10s cubic-bezier(0.16, 1, 0.3, 1) var(--animation-iteration);
+}
+.subtitle-part-3 {
+  display: inline-block;
+  will-change: transform, opacity, filter;
+  animation: blurWord3 10s cubic-bezier(0.16, 1, 0.3, 1) var(--animation-iteration);
+}
+.subtitle-part-4 {
+  display: inline-block;
+  will-change: transform, opacity, filter;
+  animation: blurWord4 10s cubic-bezier(0.16, 1, 0.3, 1) var(--animation-iteration);
+}
+
+/* ── Reduced motion (skill rule: accessibility) ───────────── */
+@media (prefers-reduced-motion: reduce) {
+  #title {
+    animation: none;
+    opacity: 1;
+  }
+  .subtitle-part-1,
+  .subtitle-part-2,
+  .subtitle-part-3,
+  .subtitle-part-4 {
+    animation: none;
+    opacity: 1;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════ */
+
 @layer base {
   :root {
     --background: oklch(1 0 0);
@@ -49,4 +309,212 @@
     background-color: var(--background);
     color: var(--foreground);
   }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   HELIX DASHBOARD — Bento Grid + Mouse Glow
+   ═══════════════════════════════════════════════════════════ */
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 currentColor; }
+  50% { opacity: 0.7; box-shadow: 0 0 0 4px transparent; }
+}
+
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes slide-in-top {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes helix-breathe {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+.bento-item {
+  position: relative;
+  overflow: hidden;
+  border-radius: 14px;
+  background: rgba(9, 12, 23, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 20px 22px;
+  cursor: pointer;
+  transition: border-color 0.25s ease, transform 0.2s ease, box-shadow 0.25s ease;
+  will-change: transform;
+}
+
+.bento-item::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    350px circle at var(--mouse-x, -100px) var(--mouse-y, -100px),
+    rgba(34, 197, 94, 0.09),
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.35s ease;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.bento-item:hover::before {
+  opacity: 1;
+}
+
+.bento-item:hover {
+  border-color: rgba(34, 197, 94, 0.22);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(34, 197, 94, 0.08);
+}
+
+.bento-item > * {
+  position: relative;
+  z-index: 1;
+}
+
+.bento-item-amber::before {
+  background: radial-gradient(
+    350px circle at var(--mouse-x, -100px) var(--mouse-y, -100px),
+    rgba(251, 146, 60, 0.09),
+    transparent 60%
+  );
+}
+
+.bento-item-amber:hover {
+  border-color: rgba(251, 146, 60, 0.22);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(251, 146, 60, 0.08);
+}
+
+.bento-item-red::before {
+  background: radial-gradient(
+    350px circle at var(--mouse-x, -100px) var(--mouse-y, -100px),
+    rgba(239, 68, 68, 0.09),
+    transparent 60%
+  );
+}
+
+.bento-item-red:hover {
+  border-color: rgba(239, 68, 68, 0.22);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(239, 68, 68, 0.08);
+}
+
+.bento-item-blue::before {
+  background: radial-gradient(
+    350px circle at var(--mouse-x, -100px) var(--mouse-y, -100px),
+    rgba(99, 102, 241, 0.09),
+    transparent 60%
+  );
+}
+
+.bento-item-blue:hover {
+  border-color: rgba(99, 102, 241, 0.22);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(99, 102, 241, 0.08);
+}
+
+.vital-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px;
+  background: rgba(9, 12, 23, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 16px 18px;
+  transition: border-color 0.2s;
+}
+
+.vital-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(135deg, rgba(34,197,94,0.03) 0%, transparent 60%);
+  pointer-events: none;
+}
+
+.helix-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  background: rgba(2, 6, 23, 0.88);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+.pulse-dot {
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+.activity-entry {
+  animation: slide-in-top 0.3s ease;
+}
+
+.helix-spinner {
+  animation: spin-slow 1.2s linear infinite;
+}
+
+.organ-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 5px;
+}
+
+.temp-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(to right, #22c55e 0%, #eab308 50%, #ef4444 85%);
+  position: relative;
+  overflow: visible;
+}
+
+.temp-needle {
+  position: absolute;
+  top: -4px;
+  width: 2px;
+  height: 14px;
+  background: white;
+  border-radius: 1px;
+  transform: translateX(-50%);
+  box-shadow: 0 0 6px rgba(255,255,255,0.6);
+}
+
+.ring-progress {
+  transform: rotate(-90deg);
+  transform-origin: 50% 50%;
+}
+
+.helix-nav-link {
+  font-size: 12px;
+  color: #64748b;
+  transition: color 0.15s;
+  padding: 4px 8px;
+  border-radius: 6px;
+  text-decoration: none;
+}
+
+.helix-nav-link:hover {
+  color: #e2e8f0;
+  background: rgba(255,255,255,0.05);
+}
+
+.helix-nav-link.active {
+  color: #22c55e;
+}
+
+.antibody-banner {
+  background: linear-gradient(90deg, rgba(34,197,94,0.06) 0%, rgba(34,197,94,0.03) 50%, rgba(34,197,94,0.06) 100%);
+  border: 1px solid rgba(34,197,94,0.15);
+  border-radius: 10px;
+  padding: 14px 20px;
 }

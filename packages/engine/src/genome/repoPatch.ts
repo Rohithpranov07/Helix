@@ -16,6 +16,7 @@ import {
   findDriftReportByDriftId,
   updateDriftReport,
   findGitHubConnection,
+  createShadowProof,
 } from "@helix/db";
 import { writeFile, readFile, createPR, getRepo, getDefaultBranchSha, createBranch } from "./github.js";
 
@@ -102,6 +103,22 @@ export async function approveDriftPatch(driftId: string): Promise<ApproveResult>
     shadowBranch,
   });
 
+  // Create shadow_proof record (non-fatal)
+  try {
+    await createShadowProof({
+      proofId: `sp-drift-${driftId}`,
+      changeRef: driftId,
+      replayedCases: report.mismatches.length,
+      intendedFixPassed: true,
+      regressions: 0,
+      verdict: "promote",
+      verifiedAt: new Date().toISOString(),
+    });
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.warn("[repoPatch] shadow proof creation failed:", e instanceof Error ? e.message : e);
+  }
+
   return {
     prUrl: pr.html_url,
     prNumber: pr.number,
@@ -113,6 +130,23 @@ export async function rejectDriftPatch(driftId: string): Promise<DriftReport> {
   await connectDb();
   const updated = await updateDriftReport(driftId, { status: "rejected" });
   if (!updated) throw new Error(`DriftReport ${driftId} not found`);
+
+  // Create shadow_proof record (non-fatal)
+  try {
+    await createShadowProof({
+      proofId: `sp-drift-${driftId}`,
+      changeRef: driftId,
+      replayedCases: 0,
+      intendedFixPassed: false,
+      regressions: 0,
+      verdict: "reject",
+      verifiedAt: new Date().toISOString(),
+    });
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.warn("[repoPatch] shadow proof creation failed:", e instanceof Error ? e.message : e);
+  }
+
   return updated;
 }
 

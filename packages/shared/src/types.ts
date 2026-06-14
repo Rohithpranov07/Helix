@@ -133,3 +133,86 @@ export interface GitHubConnection {
   defaultBranch: string;
   connectedAt: string;
 }
+
+// ----- Immune System §4 extended: GitHub repo-aware scan + patch flow -----
+export type ImmunePatchStatus = "pending_approval" | "approved" | "rejected" | "pr_created";
+
+export interface ImmuneFinding {
+  vulnClass: VulnClass;
+  endpoint: string;
+  evidence: string;
+  affectedFile: string;
+  diff: string;
+  newContent: string;
+}
+
+export interface ImmuneScanRun {
+  scanId: string;
+  githubOwner: string;
+  githubRepo: string;
+  shadowBranch: string;
+  scannedAt: string;
+  findings: ImmuneFinding[];
+  status: ImmunePatchStatus;
+  prUrl?: string;
+  prNumber?: number;
+}
+
+// ----- Metabolism §6 extended: GitHub repo-aware entropy digestion -----
+export type MetabolismStatus = "pending_approval" | "approved" | "rejected" | "pr_created";
+
+export interface MetabolismEnzyme {
+  enzymeType: "consolidator" | "normaliser" | "annealer";
+  targetZone: string;
+  rationale: string;
+  diff: string;
+  newContent: string;
+}
+
+export interface MetabolismRun {
+  runId: string;
+  githubOwner: string;
+  githubRepo: string;
+  shadowBranch: string;
+  measuredAt: string;
+  temperature: number;
+  dims: {
+    duplication: number;
+    patternVariance: number;
+    coupling: number;
+    vulnDensity: number;
+    comprehension: number;
+  };
+  projectedRewriteWeeks: number;
+  enzymes: MetabolismEnzyme[];
+  status: MetabolismStatus;
+  prUrl?: string;
+  prNumber?: number;
+}
+
+// ----- Nervous System §7 extended: Railway deployment patch flow -----
+export type IncidentPatchStatus = "pending_approval" | "approved" | "rejected" | "pr_created";
+
+export interface IncidentPatchFile {
+  path: string;
+  diff: string;
+  newContent: string;
+}
+
+export interface IncidentPatch {
+  patchId: string;
+  incidentId: string;
+  githubOwner: string;
+  githubRepo: string;
+  railwayProjectId: string;
+  railwayDeploymentId: string;
+  deploymentStatus: string;
+  shadowBranch: string;
+  detectedAt: string;
+  failureSummary: string;
+  causalChain: CausalStep[];
+  files: IncidentPatchFile[];
+  status: IncidentPatchStatus;
+  prUrl?: string;
+  prNumber?: number;
+}

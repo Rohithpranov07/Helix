@@ -4,7 +4,6 @@ import { ExternalApiError } from "@helix/shared";
 // Global cache survives Next.js hot-reloads in dev mode.
 // In production this is just a module singleton.
 declare global {
-  // eslint-disable-next-line no-var
   var __helixMongoose: {
     conn: typeof mongoose | null;
     promise: Promise<typeof mongoose> | null;

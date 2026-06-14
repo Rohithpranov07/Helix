@@ -36,7 +36,12 @@ export interface ChatResult {
 
 const ChatApiResponseSchema = z.object({
   choices: z.array(
-    z.object({ message: z.object({ content: z.string() }) }),
+    z.object({
+      message: z.object({
+        content: z.string().nullable(),
+        reasoning_content: z.string().nullable().optional(),
+      }),
+    }),
   ).min(1),
   model: z.string(),
 });
@@ -87,10 +92,14 @@ async function doChat(opts: ChatOptions): Promise<ChatResult> {
 
   const raw = await res.json();
   const parsed = ChatApiResponseSchema.parse(raw);
-  return {
-    content: parsed.choices[0]!.message.content,
-    model: parsed.model,
-  };
+  // sarvam-105b is a reasoning model: actual response lives in `content`;
+  // when token budget is tight it may spill into `reasoning_content` only.
+  const msg = parsed.choices[0]!.message;
+  const content = msg.content ?? msg.reasoning_content ?? null;
+  if (content == null) {
+    throw new ExternalApiError("Sarvam returned null content — increase token budget", "sarvam");
+  }
+  return { content, model: parsed.model };
 }
 
 export async function chat(opts: ChatOptions): Promise<ChatResult> {
@@ -136,7 +145,35 @@ export async function chat(opts: ChatOptions): Promise<ChatResult> {
 
   const validated = opts.schema.safeParse(parsed);
   if (!validated.success) {
-    throw new ValidationError("Sarvam JSON response failed schema validation", validated.error.issues);
+    // Retry once with explicit schema error feedback
+    const issues = validated.error.issues
+      .slice(0, 5)
+      .map((i) => `${i.path.join(".")}: ${i.message}`)
+      .join("; ");
+    const schemaRetryOpts: ChatOptions = {
+      ...opts,
+      messages: [
+        ...opts.messages,
+        { role: "assistant", content: result.content },
+        {
+          role: "user",
+          content: `Your JSON did not match the required schema. Errors: ${issues}. Respond ONLY with valid JSON that fixes these errors. No markdown, no explanation.`,
+        },
+      ],
+    };
+    const schemaRetry = await doChat(schemaRetryOpts);
+    const rawRetry = stripFences(schemaRetry.content);
+    let parsedRetry: unknown;
+    try {
+      parsedRetry = JSON.parse(rawRetry);
+    } catch {
+      throw new ValidationError("Sarvam returned invalid JSON after schema retry", { raw: rawRetry });
+    }
+    const validatedRetry = opts.schema.safeParse(parsedRetry);
+    if (!validatedRetry.success) {
+      throw new ValidationError("Sarvam JSON response failed schema validation", validatedRetry.error.issues);
+    }
+    return { content: JSON.stringify(validatedRetry.data), model: schemaRetry.model };
   }
 
   return { content: JSON.stringify(validated.data), model: result.model };
@@ -162,7 +199,7 @@ export async function tts(opts: TtsOptions): Promise<Buffer> {
   const body = {
     inputs: [opts.text],
     target_language_code: opts.languageCode ?? "en-IN",
-    speaker: opts.speaker ?? "meera",
+    speaker: opts.speaker ?? "kavya",
     model: "bulbul:v3",
     pace: opts.pace ?? 1.0,
     speech_sample_rate: opts.sampleRate ?? 22050,

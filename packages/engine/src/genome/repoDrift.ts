@@ -21,7 +21,13 @@ import {
 } from "@helix/db";
 import { gemini, sarvam } from "@helix/ai";
 import { z } from "zod";
-import { getRepoTree, readFile, getDefaultBranchSha, createBranch } from "./github.js";
+import {
+  getRepo,
+  getRepoTree,
+  readFile,
+  getDefaultBranchSha,
+  createBranch,
+} from "./github.js";
 
 // ── Sarvam JSON schemas ───────────────────────────────────────────────────────
 
@@ -124,135 +130,139 @@ export async function detectRepoDrift(
 
   for (const strand of strands) {
     try {
-    const modName = strand.moduleId.split("/").pop() ?? strand.moduleId;
-    const files = moduleFiles.get(modName) ?? [];
+      const modName = strand.moduleId.split("/").pop() ?? strand.moduleId;
+      const files = moduleFiles.get(modName) ?? [];
 
-    // Read current source
-    let sourceContent = "";
-    const fileContents = new Map<string, { content: string; sha: string }>();
-    for (const path of files.slice(0, 20)) {
-      const f = await readFile(token, owner, repo, path);
-      if (!f) continue;
-      fileContents.set(path, f);
-      sourceContent += `\n\n=== FILE: ${path} ===\n${f.content.slice(0, 4_000)}`;
-      if (sourceContent.length > 50_000) break;
-    }
+      // Read current source
+      let sourceContent = "";
+      const fileContents = new Map<string, { content: string; sha: string }>();
+      for (const path of files.slice(0, 20)) {
+        const f = await readFile(token, owner, repo, path);
+        if (!f) continue;
+        fileContents.set(path, f);
+        sourceContent += `\n\n=== FILE: ${path} ===\n${f.content.slice(0, 4_000)}`;
+        if (sourceContent.length > 50_000) break;
+      }
 
-    if (!sourceContent.trim()) continue;
+      if (!sourceContent.trim()) continue;
 
-    // 3. Gemini wide-context: compare code vs intent
-    let geminiAnalysis = "";
-    try {
-      const geminiResult = await gemini.analyze({
-        parts: [
-          {
-            text:
-              `INTENT STRAND for module "${modName}" (${owner}/${repo}):\n` +
-              `Purpose: ${strand.purpose}\n` +
-              `Invariants:\n${strand.invariants.map((i) => `  [${i.id}] ${i.rule} — ${i.rationale}`).join("\n")}\n` +
-              `Edge decisions: ${strand.edgeDecisions.join("; ")}\n\n` +
-              `CURRENT CODE:\n${sourceContent}\n\n` +
-              `Question: Does the current code faithfully implement every stated invariant? ` +
-              `List any invariants that appear violated, missing, or only partially implemented. ` +
-              `Be specific about which file and line appears to cause the drift.`,
-          },
-        ],
-        systemPrompt:
-          "You are a code-intent alignment analyst. Be precise. Cite specific invariant IDs.",
-      });
-      geminiAnalysis = geminiResult.content;
-    } catch {
-      geminiAnalysis = "Gemini unavailable — proceeding with Sarvam analysis only.";
-    }
+      // 3. Gemini wide-context: compare code vs intent
+      let geminiAnalysis = "";
+      try {
+        const geminiResult = await gemini.analyze({
+          parts: [
+            {
+              text:
+                `INTENT STRAND for module "${modName}" (${owner}/${repo}):\n` +
+                `Purpose: ${strand.purpose}\n` +
+                `Invariants:\n${strand.invariants.map((i) => `  [${i.id}] ${i.rule} — ${i.rationale}`).join("\n")}\n` +
+                `Edge decisions: ${strand.edgeDecisions.join("; ")}\n\n` +
+                `CURRENT CODE:\n${sourceContent}\n\n` +
+                `Question: Does the current code faithfully implement every stated invariant? ` +
+                `List any invariants that appear violated, missing, or only partially implemented. ` +
+                `Be specific about which file and line appears to cause the drift.`,
+            },
+          ],
+          systemPrompt:
+            "You are a code-intent alignment analyst. Be precise. Cite specific invariant IDs.",
+        });
+        geminiAnalysis = geminiResult.content;
+      } catch {
+        geminiAnalysis = "Gemini unavailable — proceeding with Sarvam analysis only.";
+      }
 
-    // 4. Sarvam: structured mismatch reasoning (strict-JSON)
-    const analysisResult = await sarvam.chat({
-      messages: [
-        {
-          role: "system",
-          content:
-            "You are HELIX Genome. Analyze code-vs-intent drift and output ONLY valid JSON.\n" +
-            "Output EXACTLY: {\"pairingScore\":0.0-1.0,\"unpairedInvariants\":[\"id\"],\"mismatches\":[{\"invariantId\":\"id\",\"description\":\"what is wrong\",\"affectedFile\":\"path/to/file.ts\",\"severity\":\"high\"}],\"summary\":\"one sentence\"}\n" +
-            "pairingScore: 1.0 = fully paired, 0.0 = fully drifted. Only flag REAL violations, not style. Use empty arrays if nothing found.",
-        },
-        {
-          role: "user",
-          content:
-            `Module: ${modName} — ${strand.purpose}\n\n` +
-            `Intent invariants:\n${strand.invariants.map((i) => `[${i.id}] ${i.rule}`).join("\n")}\n\n` +
-            `Gemini analysis:\n${geminiAnalysis}\n\n` +
-            `Current code sample:\n${sourceContent.slice(0, 15_000)}`,
-        },
-      ],
-      schema: MismatchListSchema,
-      temperature: 0.1,
-    });
-    const analysis = JSON.parse(analysisResult.content) as z.infer<typeof MismatchListSchema>;
-
-    // Update pairing score on the strand
-    await updateIntentStrand(strand._id, {
-      pairing: {
-        score: analysis.pairingScore,
-        lastChecked: new Date().toISOString(),
-        unpairedInvariants: analysis.unpairedInvariants,
-      },
-    });
-
-    if (analysis.pairingScore < worstScore) worstScore = analysis.pairingScore;
-
-    // 5. For each mismatch: Sarvam synthesizes a minimal patch
-    for (const mismatch of analysis.mismatches) {
-      const file = fileContents.get(mismatch.affectedFile);
-      if (!file) continue;
-
-      const patchResult = await sarvam.chat({
+      // 4. Sarvam: structured mismatch reasoning (strict-JSON)
+      const analysisResult = await sarvam.chat({
         messages: [
           {
             role: "system",
             content:
-              "You are HELIX Genome. Generate a minimal patch to fix a code-intent drift.\n" +
-              "Output ONLY valid JSON with EXACTLY: {\"diff\":\"unified diff string\",\"newContent\":\"complete corrected file content\",\"rationale\":\"one sentence\"}\n" +
-              "The fix must restore the invariant without changing any other behavior.",
+              "You are HELIX Genome. Analyze code-vs-intent drift and output ONLY valid JSON.\n" +
+              "Output EXACTLY: {\"pairingScore\":0.0-1.0,\"unpairedInvariants\":[\"id\"],\"mismatches\":[{\"invariantId\":\"id\",\"description\":\"what is wrong\",\"affectedFile\":\"path/to/file.ts\",\"severity\":\"high\"}],\"summary\":\"one sentence\"}\n" +
+              "pairingScore: 1.0 = fully paired, 0.0 = fully drifted. Only flag REAL violations, not style. Use empty arrays if nothing found.",
           },
           {
             role: "user",
             content:
-              `Invariant violated: [${mismatch.invariantId}] — ${mismatch.description}\n\n` +
-              `File: ${mismatch.affectedFile}\n\n` +
-              `Current content:\n${file.content}\n\n` +
-              `Module purpose: ${strand.purpose}\n` +
-              `Invariant rule: ${strand.invariants.find((i) => i.id === mismatch.invariantId)?.rule ?? "see description"}`,
+              `Module: ${modName} — ${strand.purpose}\n\n` +
+              `Intent invariants:\n${strand.invariants.map((i) => `[${i.id}] ${i.rule}`).join("\n")}\n\n` +
+              `Gemini analysis:\n${geminiAnalysis}\n\n` +
+              `Current code sample:\n${sourceContent.slice(0, 15_000)}`,
           },
         ],
-        schema: PatchSchema,
+        schema: MismatchListSchema,
         temperature: 0.1,
       });
-      const patch = JSON.parse(patchResult.content) as z.infer<typeof PatchSchema>;
+      const analysis = JSON.parse(analysisResult.content) as z.infer<typeof MismatchListSchema>;
 
-      allMismatches.push({
-        invariantId: mismatch.invariantId,
-        description: mismatch.description,
-        affectedFile: mismatch.affectedFile,
-        diff: patch.diff,
-        newContent: patch.newContent,
+      // Update pairing score on the strand
+      await updateIntentStrand(strand._id, {
+        pairing: {
+          score: analysis.pairingScore,
+          lastChecked: new Date().toISOString(),
+          unpairedInvariants: analysis.unpairedInvariants,
+        },
       });
-    }
+
+      if (analysis.pairingScore < worstScore) worstScore = analysis.pairingScore;
+
+      // 5. For each mismatch: Sarvam synthesizes a minimal patch
+      for (const mismatch of analysis.mismatches) {
+        const file = fileContents.get(mismatch.affectedFile);
+        if (!file) continue;
+
+        const patchResult = await sarvam.chat({
+          messages: [
+            {
+              role: "system",
+              content:
+                "You are HELIX Genome. Generate a minimal patch to fix a code-intent drift.\n" +
+                "Output ONLY valid JSON with EXACTLY: {\"diff\":\"unified diff string\",\"newContent\":\"complete corrected file content\",\"rationale\":\"one sentence\"}\n" +
+                "The fix must restore the invariant without changing any other behavior.",
+            },
+            {
+              role: "user",
+              content:
+                `Invariant violated: [${mismatch.invariantId}] — ${mismatch.description}\n\n` +
+                `File: ${mismatch.affectedFile}\n\n` +
+                `Current content:\n${file.content}\n\n` +
+                `Module purpose: ${strand.purpose}\n` +
+                `Invariant rule: ${strand.invariants.find((i) => i.id === mismatch.invariantId)?.rule ?? "see description"}`,
+            },
+          ],
+          schema: PatchSchema,
+          temperature: 0.1,
+        });
+        const patch = JSON.parse(patchResult.content) as z.infer<typeof PatchSchema>;
+
+        allMismatches.push({
+          invariantId: mismatch.invariantId,
+          description: mismatch.description,
+          affectedFile: mismatch.affectedFile,
+          diff: patch.diff,
+          newContent: patch.newContent,
+        });
+      }
     } catch (modErr) {
-      console.warn(`[genome/drift] skipping module ${strand.moduleId}:`, modErr instanceof Error ? modErr.message : modErr);
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[genome/drift] skipping module ${strand.moduleId}:`,
+        modErr instanceof Error ? modErr.message : modErr,
+      );
     }
   }
 
-  // 6. Create shadow branch on GitHub (helix-shadow-<ts>)
+  // 6. Create shadow branch on GitHub (helix-shadow-<timestamp>)
   const shadowBranch = `helix-shadow-${Date.now()}`;
   let defaultBranch = "main";
   try {
-    const { getRepo } = await import("./github.js");
     const repoInfo = await getRepo(token, owner, repo);
     defaultBranch = repoInfo.default_branch;
     const sha = await getDefaultBranchSha(token, owner, repo, defaultBranch);
     await createBranch(token, owner, repo, shadowBranch, sha);
   } catch (e) {
-    // If branch creation fails, we still persist the report — PR step will retry
+    // Branch creation failure is non-fatal — report is still persisted; PR step will retry.
+    // eslint-disable-next-line no-console
     console.warn("Shadow branch creation failed:", e instanceof Error ? e.message : e);
   }
 

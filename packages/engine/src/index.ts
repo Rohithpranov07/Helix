@@ -10,10 +10,23 @@ import type {
   GenomeDriftReq, GenomeDriftRes,
   GenomeApproveReq, GenomeApproveRes,
   GenomeRejectReq, GenomeRejectRes,
+  RailwayProjectsReq, RailwayProjectsRes,
+  RailwayCheckReq, RailwayCheckRes,
+  IncidentPatchesReq, IncidentPatchesRes,
+  IncidentApproveReq, IncidentApproveRes,
+  IncidentRejectReq, IncidentRejectRes,
+  ImmuneScanReq, ImmuneScanRes,
+  ImmuneListReq, ImmuneListRes,
+  ImmuneApproveReq, ImmuneApproveRes,
+  ImmuneRejectReq, ImmuneRejectRes,
+  MetabolismScanReq, MetabolismScanRes,
+  MetabolismListReq, MetabolismListRes,
+  MetabolismApproveReq, MetabolismApproveRes,
+  MetabolismRejectReq, MetabolismRejectRes,
 } from "@helix/shared";
 
 export type { IncidentResolveReq, IncidentResolveRes } from "@helix/shared";
-export type { DriftReport, GitHubConnection, DriftMismatch } from "@helix/shared";
+export type { DriftReport, GitHubConnection, DriftMismatch, IncidentPatch, IncidentPatchStatus, ImmuneScanRun, ImmuneFinding, ImmunePatchStatus } from "@helix/shared";
 export { indexGitHubRepo } from "./genome/repoIndex.js";
 export { detectRepoDrift } from "./genome/repoDrift.js";
 export { approveDriftPatch, rejectDriftPatch } from "./genome/repoPatch.js";
@@ -302,13 +315,120 @@ export async function genomeDrift(req: GenomeDriftReq): Promise<GenomeDriftRes> 
 }
 
 export async function genomeApprove(req: GenomeApproveReq): Promise<GenomeApproveRes> {
+  const { connectDb } = await import("@helix/db");
+  await connectDb();
   const { approveDriftPatch: _approve } = await import("./genome/repoPatch.js");
   const result = await _approve(req.driftId);
   return { prUrl: result.prUrl, prNumber: result.prNumber, report: result.report };
 }
 
 export async function genomeReject(req: GenomeRejectReq): Promise<GenomeRejectRes> {
+  const { connectDb } = await import("@helix/db");
+  await connectDb();
   const { rejectDriftPatch: _reject } = await import("./genome/repoPatch.js");
   const report = await _reject(req.driftId);
   return { driftId: report.driftId, status: report.status };
+}
+
+export async function railwayProjects(_req: RailwayProjectsReq): Promise<RailwayProjectsRes> {
+  const { fetchProjects } = await import("./nervous/railway.js");
+  const projects = await fetchProjects();
+  return { projects };
+}
+
+export async function railwayCheck(req: RailwayCheckReq): Promise<RailwayCheckRes> {
+  const { detectAndHealRailwayFailure } = await import("./nervous/repoHeal.js");
+  const patch = await detectAndHealRailwayFailure({
+    projectId: req.projectId,
+    githubOwner: req.githubOwner,
+    githubRepo: req.githubRepo,
+  });
+  return { patch };
+}
+
+export async function incidentPatches(req: IncidentPatchesReq): Promise<IncidentPatchesRes> {
+  const { connectDb, listIncidentPatches } = await import("@helix/db");
+  await connectDb();
+  const patches = await listIncidentPatches({
+    ...(req.githubOwner !== undefined ? { githubOwner: req.githubOwner } : {}),
+    ...(req.githubRepo !== undefined ? { githubRepo: req.githubRepo } : {}),
+    ...(req.status !== undefined ? { status: req.status } : {}),
+  });
+  return { patches };
+}
+
+export async function incidentApprove(req: IncidentApproveReq): Promise<IncidentApproveRes> {
+  const { approveIncidentPatch } = await import("./nervous/repoHeal.js");
+  const result = await approveIncidentPatch(req.patchId);
+  return { prUrl: result.prUrl, prNumber: result.prNumber, patch: result.patch };
+}
+
+export async function incidentReject(req: IncidentRejectReq): Promise<IncidentRejectRes> {
+  const { rejectIncidentPatch } = await import("./nervous/repoHeal.js");
+  const patch = await rejectIncidentPatch(req.patchId);
+  return { patchId: patch.patchId, status: patch.status };
+}
+
+export async function immuneScan(req: ImmuneScanReq): Promise<ImmuneScanRes> {
+  const { immuneScanRepo } = await import("./immune/repoScan.js");
+  const scan = await immuneScanRepo({
+    githubOwner: req.githubOwner,
+    githubRepo: req.githubRepo,
+  });
+  return { scan };
+}
+
+export async function immuneList(req: ImmuneListReq): Promise<ImmuneListRes> {
+  const { connectDb, listImmuneScanRuns } = await import("@helix/db");
+  await connectDb();
+  const scans = await listImmuneScanRuns({
+    ...(req.githubOwner !== undefined ? { githubOwner: req.githubOwner } : {}),
+    ...(req.githubRepo !== undefined ? { githubRepo: req.githubRepo } : {}),
+    ...(req.status !== undefined ? { status: req.status } : {}),
+  });
+  return { scans };
+}
+
+export async function immuneApprove(req: ImmuneApproveReq): Promise<ImmuneApproveRes> {
+  const { approveImmuneScan } = await import("./immune/repoScan.js");
+  const result = await approveImmuneScan(req.scanId);
+  return { prUrl: result.prUrl, prNumber: result.prNumber, scan: result.scan };
+}
+
+export async function immuneReject(req: ImmuneRejectReq): Promise<ImmuneRejectRes> {
+  const { rejectImmuneScan } = await import("./immune/repoScan.js");
+  const scan = await rejectImmuneScan(req.scanId);
+  return { scanId: scan.scanId, status: scan.status };
+}
+
+export async function metabolismScan(req: MetabolismScanReq): Promise<MetabolismScanRes> {
+  const { metabolismScanRepo } = await import("./metabolism/repoMetabolism.js");
+  const run = await metabolismScanRepo({
+    githubOwner: req.githubOwner,
+    githubRepo: req.githubRepo,
+  });
+  return { run };
+}
+
+export async function metabolismList(req: MetabolismListReq): Promise<MetabolismListRes> {
+  const { connectDb, listMetabolismRuns } = await import("@helix/db");
+  await connectDb();
+  const runs = await listMetabolismRuns({
+    ...(req.githubOwner !== undefined ? { githubOwner: req.githubOwner } : {}),
+    ...(req.githubRepo !== undefined ? { githubRepo: req.githubRepo } : {}),
+    ...(req.status !== undefined ? { status: req.status } : {}),
+  });
+  return { runs };
+}
+
+export async function metabolismApprove(req: MetabolismApproveReq): Promise<MetabolismApproveRes> {
+  const { approveMetabolismRun } = await import("./metabolism/repoMetabolism.js");
+  const result = await approveMetabolismRun(req.runId);
+  return { prUrl: result.prUrl, prNumber: result.prNumber, run: result.run };
+}
+
+export async function metabolismReject(req: MetabolismRejectReq): Promise<MetabolismRejectRes> {
+  const { rejectMetabolismRun } = await import("./metabolism/repoMetabolism.js");
+  const run = await rejectMetabolismRun(req.runId);
+  return { runId: run.runId, status: run.status };
 }

@@ -167,9 +167,9 @@ function deterministicAnalyze(sources: string): EntropyDims {
   const lines = sources.split("\n");
   const total = Math.max(1, lines.length);
 
-  // vulnDensity: count HELIX vulnerability markers and obvious patterns.
   const vulnLines = lines.filter((l) =>
-    /HELIX-DEMO-VULN|dangerouslySetInnerHTML|string\s*\+\s*query|OR\s+'1'='1'|service_role/i.test(l),
+    /dangerouslySetInnerHTML|innerHTML\s*=|eval\(|process\.env\.[A-Z_]{8,}\s*=|hardcoded|password\s*=\s*['"][^'"]{4}/i.test(l) ||
+    /(\+\s*req\.|`\$\{req\.|string\s*\+\s*query|SELECT.*\+|INSERT.*\+)/i.test(l),
   ).length;
   const vulnDensity = Math.min(1, vulnLines / Math.max(1, total * 0.05));
 

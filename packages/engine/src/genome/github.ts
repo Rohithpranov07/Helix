@@ -100,7 +100,7 @@ export async function readFile(
     const data = await ghFetch<GHContent>(
       token,
       "GET",
-      `/repos/${owner}/${repo}/contents/${encodeURIComponent(path)}`,
+      `/repos/${owner}/${repo}/contents/${path}`,
     );
     if (data.encoding !== "base64") return null;
     const content = Buffer.from(data.content.replace(/\n/g, ""), "base64").toString("utf8");
@@ -166,7 +166,7 @@ export async function writeFile(
   await ghFetch(
     token,
     "PUT",
-    `/repos/${owner}/${repo}/contents/${encodeURIComponent(path)}`,
+    `/repos/${owner}/${repo}/contents/${path}`,
     body,
   );
 }

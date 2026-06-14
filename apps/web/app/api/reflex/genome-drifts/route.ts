@@ -6,8 +6,8 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const owner = searchParams.get("owner") ?? undefined;
-  const repo = searchParams.get("repo") ?? undefined;
+  const owner = (searchParams.get("githubOwner") ?? searchParams.get("owner")) ?? undefined;
+  const repo = (searchParams.get("githubRepo") ?? searchParams.get("repo")) ?? undefined;
   const status = searchParams.get("status") as DriftStatus | null;
 
   try {
