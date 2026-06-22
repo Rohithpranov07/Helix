@@ -1,7 +1,65 @@
+/* Font @import rules must come before @import "tailwindcss" — Tailwind v4 injects
+   its own CSS (including @property rules) at that import site, which would push
+   any @import written after it out of valid leading position, risking browsers
+   silently dropping it per the CSS spec (@import must precede all non-@charset/
+   @layer rules). */
+@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap');
 @import "tailwindcss";
+@import "tw-animate-css";
 
 @theme inline {
   --radius-full: 999px;
+  --animate-rainbow: rainbow 3s linear infinite;
+  --animate-marquee: marquee var(--duration) infinite linear;
+  --animate-marquee-vertical: marquee-vertical var(--duration) linear infinite;
+  --animate-accordion-down: accordion-down 0.2s ease-out;
+  --animate-accordion-up: accordion-up 0.2s ease-out;
+
+  /* shadcn semantic color tokens for Tailwind v4 utilities.
+     Bridges the --card / --primary / ... vars below into the
+     bg, text and border color utilities. */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+}
+
+/* Premium editorial display serif — used for hero headings */
+.font-display {
+  font-family: 'Instrument Serif', 'Times New Roman', Georgia, serif;
+  font-weight: 400;
+}
+
+/* Tall, condensed display font — used for the "Vitals" / "Organs" hero words */
+.font-tall {
+  font-family: 'Bebas Neue', 'Oswald', 'Arial Narrow', sans-serif;
+  font-weight: 400;
+}
+
+/* Handwritten script — used for the "&" between the tall hero words */
+.font-handwritten {
+  font-family: 'Caveat', cursive;
+  font-weight: 700;
+}
+
+/* 8-bit / retro pixel font — used by the 8bitcn CTA card */
+.retro {
+  font-family: 'Press Start 2P', monospace;
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -10,6 +68,34 @@
 
 :root {
   --animation-iteration: infinite;
+}
+
+/* ── Rainbow border — animated background-position sweep, used by animate-rainbow ── */
+@keyframes rainbow {
+  0% { background-position: 0%; }
+  100% { background-position: 200%; }
+}
+
+/* ── Marquee — infinite horizontal/vertical scroll, used by the Marquee component ── */
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(calc(-100% - var(--gap))); }
+}
+
+@keyframes marquee-vertical {
+  from { transform: translateY(0); }
+  to { transform: translateY(calc(-100% - var(--gap))); }
+}
+
+/* ── Accordion — radix data-state driven height animation, used by AccordionContent ── */
+@keyframes accordion-down {
+  from { height: 0; }
+  to { height: var(--radix-accordion-content-height); }
+}
+
+@keyframes accordion-up {
+  from { height: var(--radix-accordion-content-height); }
+  to { height: 0; }
 }
 
 /* ── Stars animation ─────────────────────────────────────── */
@@ -256,6 +342,11 @@
     animation: none;
     opacity: 1;
   }
+  .cosmic-stars,
+  .cosmic-stars-medium,
+  .cosmic-stars-large {
+    animation: none;
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════ */
@@ -279,6 +370,14 @@
     --input: oklch(0.922 0 0);
     --ring: oklch(0.708 0 0);
     --radius: 0.625rem;
+
+    /* Metabolism temperature-gradient border — green (cool) through amber to red (hot),
+       same scale as .temp-bar, used by the animated rainbow-style border below. */
+    --color-1: 142 71% 45%;
+    --color-2: 48 96% 53%;
+    --color-3: 0 84% 60%;
+    --color-4: 48 96% 53%;
+    --color-5: 142 71% 45%;
   }
 
   .dark {
@@ -298,6 +397,7 @@
     --border: oklch(1 0 0 / 10%);
     --input: oklch(1 0 0 / 15%);
     --ring: oklch(0.556 0 0);
+    --sidebar-ring: oklch(0.439 0 0);
   }
 }
 
@@ -305,8 +405,14 @@
   * {
     border-color: var(--border);
   }
+  html {
+    /* Root canvas color — what shows in the overscroll/rubber-band zone */
+    background-color: #020610;
+    /* Prevent rubber-band scroll from exposing the canvas at the extremes */
+    overscroll-behavior-y: none;
+  }
   body {
-    background-color: var(--background);
+    background-color: #020610;
     color: var(--foreground);
   }
 }
@@ -458,6 +564,16 @@
   animation: spin-slow 1.2s linear infinite;
 }
 
+/* Hides the scrollbar on an element while keeping it scrollable — used by
+   horizontal card carousels. Scoped to the element, unlike a global body rule. */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 .organ-badge {
   display: inline-flex;
   align-items: center;
@@ -517,4 +633,123 @@
   border: 1px solid rgba(34,197,94,0.15);
   border-radius: 10px;
   padding: 14px 20px;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   REFLEX PAGE — Memphis Group: cream paper, thick ink borders,
+   candy accents, hard offset shadows that press flat on click
+   ═══════════════════════════════════════════════════════════ */
+
+.memphis-press {
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.memphis-press:active:not(:disabled) {
+  transform: translate(3px, 3px) !important;
+  box-shadow: 0px 0px 0px #1a1a1a !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SHADOW PAGE — Tenebrism: a near-black void cut by one
+   dramatic warm light source — Caravaggio chiaroscuro. Most
+   of the surface stays in shadow; only the lit edge catches gold.
+   ═══════════════════════════════════════════════════════════ */
+
+/* Lit object — dark void base, illuminated only from one corner, hard dramatic cast shadow */
+.tenebrism-card {
+  position: relative;
+  background: linear-gradient(140deg, rgba(212, 162, 76, 0.16) 0%, rgba(10, 8, 5, 0.92) 45%);
+  border: 1px solid rgba(212, 162, 76, 0.22);
+  border-top-color: rgba(232, 184, 92, 0.4);
+  border-left-color: rgba(232, 184, 92, 0.35);
+  border-radius: 4px;
+  box-shadow: 10px 14px 28px -6px rgba(0, 0, 0, 0.75);
+  transition: border-color 0.3s ease, box-shadow 0.3s ease, transform 0.3s ease;
+}
+
+.tenebrism-card:hover {
+  border-top-color: rgba(232, 184, 92, 0.65);
+  border-left-color: rgba(232, 184, 92, 0.55);
+  box-shadow: 14px 18px 36px -6px rgba(0, 0, 0, 0.85);
+}
+
+.tenebrism-press {
+  transition: transform 0.15s ease, filter 0.2s ease;
+}
+
+.tenebrism-press:hover:not(:disabled) {
+  filter: brightness(1.25);
+}
+
+.tenebrism-press:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+@keyframes tenebrism-flicker {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.85; }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   ANTIBODIES PAGE — Mid-Century Modern: Atomic Age earth
+   tones, organic rounded forms, starburst + boomerang motifs
+   ═══════════════════════════════════════════════════════════ */
+
+.atomic-card {
+  position: relative;
+  background: #fffaf0;
+  border-radius: 22px;
+  border: 1px solid rgba(58, 46, 38, 0.1);
+  box-shadow: 0 1px 0 rgba(58, 46, 38, 0.04), 0 10px 24px rgba(58, 46, 38, 0.08);
+  transition: transform 0.2s ease, box-shadow 0.25s ease;
+}
+
+.atomic-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 1px 0 rgba(58, 46, 38, 0.05), 0 16px 32px rgba(58, 46, 38, 0.12);
+}
+
+.atomic-press {
+  transition: transform 0.12s ease, filter 0.2s ease;
+}
+
+.atomic-press:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+
+.atomic-press:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   LOGS PAGE — Neo-Brutalism: white canvas, thick black
+   borders, hard black offset shadows, flat saturated accents,
+   zero rounding, buttons that physically press flat
+   ═══════════════════════════════════════════════════════════ */
+
+.neo-card {
+  position: relative;
+  background: #fff;
+  border: 3px solid #0a0a0a;
+  border-radius: 6px;
+  box-shadow: 5px 5px 0px #0a0a0a;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.neo-press {
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.neo-press:active:not(:disabled) {
+  transform: translate(3px, 3px) !important;
+  box-shadow: 0px 0px 0px #0a0a0a !important;
+}
+
+/* Hover-lift — pairs with .neo-card; rises and deepens its shadow on hover.
+   A plain Tailwind hover:shadow-[...] utility can't win here since .neo-card's
+   unconditional box-shadow is defined later in this file than Tailwind's
+   utilities layer, so it always overrides at equal specificity. */
+.neo-lift:hover {
+  transform: translate(-3px, -3px);
+  box-shadow: 9px 9px 0px #0a0a0a;
 }

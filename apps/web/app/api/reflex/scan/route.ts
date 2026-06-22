@@ -1,8 +1,9 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { ScanRunReqSchema } from "@helix/shared";
 import { scanRun } from "@helix/engine";
+import { withRateLimit, LIMITS } from "@/lib/apiRateLimit";
 
-export async function POST(req: Request) {
+const handler = async (req: NextRequest) => {
   const body: unknown = await req.json().catch(() => null);
   const parsed = ScanRunReqSchema.safeParse(body);
   if (!parsed.success) {
@@ -18,4 +19,6 @@ export async function POST(req: Request) {
     const message = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: "INTERNAL_ERROR", message }, { status: 500 });
   }
-}
+};
+
+export const POST = withRateLimit(LIMITS.SCAN, handler);

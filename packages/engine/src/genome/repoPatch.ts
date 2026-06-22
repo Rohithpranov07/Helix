@@ -10,7 +10,7 @@
  *
  * The PR is opened — no auto-merge. Human reviews and merges.
  */
-import type { DriftReport } from "@helix/shared";
+import { ExternalApiError, type DriftReport } from "@helix/shared";
 import {
   connectDb,
   findDriftReportByDriftId,
@@ -87,15 +87,54 @@ export async function approveDriftPatch(driftId: string): Promise<ApproveResult>
   // Build PR body — include full diff for each mismatch for human review
   const prBody = buildPRBody(report, committed);
 
-  const pr = await createPR(
-    token,
-    owner,
-    repo,
-    shadowBranch,
-    defaultBranch,
-    `[HELIX Genome] Drift fix — ${report.mismatches.length} invariant(s) restored`,
-    prBody,
-  );
+  let pr;
+  try {
+    pr = await createPR(
+      token,
+      owner,
+      repo,
+      shadowBranch,
+      defaultBranch,
+      `[HELIX Genome] Drift fix — ${report.mismatches.length} invariant(s) restored`,
+      prBody,
+    );
+  } catch (err: any) {
+    if (err instanceof ExternalApiError && err.message.includes("no history in common")) {
+      // Recreate branch from the new head since history was rewritten
+      const headSha = await getDefaultBranchSha(token, owner, repo, defaultBranch);
+      shadowBranch = `helix-shadow-${Date.now()}`;
+      await createBranch(token, owner, repo, shadowBranch, headSha);
+
+      const newCommitted: string[] = [];
+      for (const mismatch of report.mismatches) {
+        if (newCommitted.includes(mismatch.affectedFile)) continue;
+        const current = await readFile(token, owner, repo, mismatch.affectedFile, shadowBranch);
+        await writeFile(
+          token,
+          owner,
+          repo,
+          mismatch.affectedFile,
+          mismatch.newContent,
+          `fix(genome): restore invariants in ${mismatch.affectedFile}`,
+          shadowBranch,
+          current?.sha,
+        );
+        newCommitted.push(mismatch.affectedFile);
+      }
+
+      pr = await createPR(
+        token,
+        owner,
+        repo,
+        shadowBranch,
+        defaultBranch,
+        `[HELIX Genome] Drift fix — ${report.mismatches.length} invariant(s) restored`,
+        prBody,
+      );
+    } else {
+      throw err;
+    }
+  }
 
   // Persist result
   const updated = await updateDriftReport(driftId, {

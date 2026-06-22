@@ -25,12 +25,12 @@ function DisplayCard({
   return (
     <div
       className={cn(
-        "relative flex h-36 w-[22rem] -skew-y-[8deg] select-none flex-col justify-between rounded-xl border-2 bg-[#1a1a1e]/80 backdrop-blur-md px-4 py-3 transition-all duration-700 after:absolute after:-right-1 after:top-[-5%] after:h-[110%] after:w-[20rem] after:bg-gradient-to-l after:from-[#0f0f0f] after:to-transparent after:content-[''] hover:border-white/20 hover:bg-[#222226] [&>*]:flex [&>*]:items-center [&>*]:gap-2 border-white/5",
+        "relative flex h-36 w-[22rem] -skew-y-[8deg] select-none flex-col justify-between rounded-xl border bg-white/80 backdrop-blur-md px-4 py-3 text-[#1d1d1f] shadow-[0_1px_2px_rgba(15,23,42,0.04),0_18px_40px_-24px_rgba(15,23,42,0.25)] transition-all duration-700 after:absolute after:-right-1 after:top-[-5%] after:h-[110%] after:w-[20rem] after:bg-gradient-to-l after:from-[#f6efe2] after:to-transparent after:content-[''] hover:border-black/15 hover:bg-white [&>*]:flex [&>*]:items-center [&>*]:gap-2 border-black/[0.07]",
         className
       )}
     >
       <div>
-        <span className="relative inline-block rounded-full bg-[#1488fc]/20 p-2">
+        <span className={cn("relative inline-block rounded-full bg-[#1488fc]/15 p-2", iconClassName)}>
           {icon}
         </span>
         <div className={cn("text-lg font-medium", titleClassName)}>{title}</div>

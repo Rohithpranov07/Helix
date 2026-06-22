@@ -10,8 +10,9 @@ import {
   listMetabolismRuns,
   listShadowProofs,
 } from "@helix/db";
+import { withRateLimit, LIMITS } from "@/lib/apiRateLimit";
 
-export async function GET() {
+const handler = async () => {
   try {
     await connectDb();
 
@@ -184,4 +185,6 @@ export async function GET() {
       { status: 500 },
     );
   }
-}
+};
+
+export const GET = withRateLimit(LIMITS.READ_HEAVY, handler);

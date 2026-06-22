@@ -3,17 +3,18 @@
  * POST { incidentId, audio: base64-wav } → { transcript, answer, audio: base64 | null }
  * audio is null when TTS is unavailable; caller shows answer text instead.
  */
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { connectDb, findIncidentByIncidentId } from "@helix/db";
 import { sarvam, reason } from "@helix/ai";
+import { withRateLimit, LIMITS } from "@/lib/apiRateLimit";
 
 const ReqSchema = z.object({
   incidentId: z.string().min(1),
   audio: z.string().min(1), // base64-encoded WAV
 });
 
-export async function POST(req: Request) {
+const handler = async (req: NextRequest) => {
   const body: unknown = await req.json().catch(() => null);
   const parsed = ReqSchema.safeParse(body);
   if (!parsed.success) {
@@ -84,4 +85,6 @@ export async function POST(req: Request) {
   }
 
   return NextResponse.json({ transcript, answer, audio });
-}
+};
+
+export const POST = withRateLimit(LIMITS.AI, handler);

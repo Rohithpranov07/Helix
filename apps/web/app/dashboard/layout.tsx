@@ -1,33 +1,47 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
 import { NavHeader } from "@/components/ui/nav-header";
+import StaggeredMenu from "@/components/ui/StaggeredMenu";
 
-const NAV_LINKS = [
-  { href: "/dashboard/immune", label: "Immune" },
-  { href: "/dashboard/incidents", label: "Incidents" },
-  { href: "/dashboard/genome", label: "Genome" },
-  { href: "/dashboard/metabolism", label: "Metabolism" },
-  { href: "/dashboard/shadow", label: "Shadow" },
-  { href: "/dashboard/antibodies", label: "Antibodies" },
+// Right-side staggered overlay menu — mirrors the dashboard routes.
+const MENU_ITEMS = [
+  { label: "Home",       ariaLabel: "Go to the dashboard home",     link: "/dashboard" },
+  { label: "Genome",     ariaLabel: "Go to Genome",                 link: "/dashboard/genome" },
+  { label: "Immune",     ariaLabel: "Go to Immune system",          link: "/dashboard/immune" },
+  { label: "Reflex",     ariaLabel: "Go to Resurrection Reflex",    link: "/dashboard/incidents" },
+  { label: "Logs",       ariaLabel: "Go to Logs",                   link: "/dashboard/logs" },
+  { label: "Metabolism", ariaLabel: "Go to Metabolism",            link: "/dashboard/metabolism" },
+  { label: "Shadow",     ariaLabel: "Go to Shadow",                 link: "/dashboard/shadow" },
+  { label: "Antibodies", ariaLabel: "Go to Immune Memory",          link: "/dashboard/antibodies" },
+];
+
+const SOCIAL_ITEMS = [
+  { label: "GitHub", link: "https://github.com" },
+  { label: "Docs",   link: "https://nextjs.org" },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="dark min-h-screen bg-black text-slate-50 font-sans relative">
+    <div className="dark min-h-screen text-slate-50 font-sans relative" style={{ backgroundColor: "#020610" }}>
       <NavHeader />
-      {/* Subtle Grid Background */}
-      <div 
-          className="fixed inset-0 z-0 pointer-events-none" 
-          style={{ 
-              backgroundImage: `linear-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.06) 1px, transparent 1px)`, 
-              backgroundSize: '40px 40px' 
-          }} 
+
+      {/* Right-side staggered overlay menu */}
+      <StaggeredMenu
+        position="right"
+        isFixed
+        items={MENU_ITEMS}
+        socialItems={SOCIAL_ITEMS}
+        displaySocials
+        displayItemNumbering
+        menuButtonColor="#000"
+        openMenuButtonColor="#000"
+        changeMenuColorOnOpen
+        colors={["#1b2a4a", "#38bdf8"]}
+        accentColor="#38bdf8"
       />
+
       {/* Page content */}
-      <main className="relative z-10 pt-24">
+      <main className="relative z-10">
         {children}
       </main>
     </div>

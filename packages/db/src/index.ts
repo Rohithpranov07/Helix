@@ -1,4 +1,5 @@
 export { connectDb, disconnectDb } from "./connect.js";
+export { checkRateLimit, type RateLimitResult } from "./rateLimit.js";
 export { ensureTimeSeriesCollection } from "./ensureCollections.js";
 
 // Models

@@ -85,7 +85,7 @@ export interface IndexRepoOptions {
   owner: string;
   repo: string;
   intentDocPaths?: string[]; // caller-specified PRD / spec files
-  intentDocsContent?: string[]; // caller-provided content
+  intentDocsContent?: string[] | undefined; // caller-provided content
 }
 
 export async function indexGitHubRepo(
