@@ -40,6 +40,14 @@ export async function connectDb(): Promise<typeof mongoose> {
       dbName,
       serverSelectionTimeoutMS: 10_000,
       socketTimeoutMS: 45_000,
+      // M0 free tier cap is 500 total connections.
+      // Keep pool small — Next.js spawns many concurrent invocations.
+      maxPoolSize: 5,
+      minPoolSize: 1,
+      maxIdleTimeMS: 30_000,
+      waitQueueTimeoutMS: 5_000,
+      // Don't buffer ops when disconnected — fail fast instead of piling up
+      bufferCommands: false,
     })
     .then((m) => {
       cache.conn = m;

@@ -181,14 +181,12 @@ export const MagneticCursor: FC<MagneticCursorProps> = ({
 
     const handleMouseLeave = () => gsap.to(cursorEl, { opacity: 0, duration: 0.3 });
     const handleMouseEnter = () => gsap.to(cursorEl, { opacity: 1, duration: 0.3 });
-    const handleClick = (event: MouseEvent) => {};
 
     gsap.ticker.add(update);
     window.addEventListener('pointermove', onMouseMove);
     window.addEventListener('pointermove', initializePosition, { once: true });
     document.addEventListener('mouseleave', handleMouseLeave);
     document.addEventListener('mouseenter', handleMouseEnter);
-    window.addEventListener('click', handleClick);
 
     const cleanupFunctions: (() => void)[] = [];
 
@@ -294,7 +292,6 @@ export const MagneticCursor: FC<MagneticCursorProps> = ({
       window.removeEventListener('pointermove', onMouseMove);
       document.removeEventListener('mouseleave', handleMouseLeave);
       document.removeEventListener('mouseenter', handleMouseEnter);
-      window.removeEventListener('click', handleClick);
       cleanupFunctions.forEach((cleanup) => cleanup());
     };
   }, [disableOnTouch, isTouchDevice, hoverPadding, hoverAttribute, cursorColor, shape]);
@@ -309,7 +306,7 @@ export const MagneticCursor: FC<MagneticCursorProps> = ({
     pointerEvents: 'none',
     willChange: 'transform, width, height, border-radius',
     backgroundColor: cursorColor,
-    mixBlendMode: blendMode as any,
+    mixBlendMode: blendMode as React.CSSProperties['mixBlendMode'],
     width: cursorSize,
     height: cursorSize,
     borderRadius: shape === 'circle' ? '50%' : shape === 'square' ? '0' : '8px',

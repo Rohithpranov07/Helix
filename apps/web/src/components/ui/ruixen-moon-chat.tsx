@@ -1,16 +1,18 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import ReactDOM from "react-dom";
+import { AnimatePresence, motion } from "motion/react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 import { OnboardingDialog } from "@/components/ui/onboarding-dialog";
+import Link from "next/link";
 import {
   GitBranch,
   Paperclip,
   ArrowUpIcon,
+  ArrowRight,
   Dna,
   ShieldCheck,
   Activity,
@@ -20,8 +22,75 @@ import {
   Loader2,
 } from "lucide-react";
 
-const BG_URL =
-  "https://pub-940ccf6255b54fa799a9b01050e6c227.r2.dev/ruixen_moon_2.png";
+const HEADLINE_SHADOW =
+  "1px 1px 0 #001A99, 2px 2px 0 #001A99, 3px 3px 0 #001A99, 4px 4px 0 #001A99, 5px 5px 0 #001A99, 6px 6px 0 #001A99";
+
+const ArrowAccentLeft = () => (
+  <svg viewBox="0 0 100 100" className="w-full h-full text-[#CCFF00] stroke-current overflow-visible" fill="none" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M10,90 C 10,40 40,20 60,50 C 70,65 80,75 95,70" />
+    <path d="M80,55 L95,70 L85,85" />
+  </svg>
+);
+
+const ArrowAccentRight = () => (
+  <svg viewBox="0 0 100 100" className="w-full h-full text-[#CCFF00] stroke-current overflow-visible" fill="none" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M90,10 C 80,60 60,80 40,60 C 20,40 40,20 60,30 C 80,40 70,70 50,80" />
+    <path d="M65,75 L50,80 L55,65" />
+  </svg>
+);
+
+interface FloatingStatusCardProps {
+  icon: React.ReactNode;
+  iconBg: string;
+  label: string;
+  stat: string;
+  rotate: number;
+  duration: number;
+  delay?: number;
+  className: string;
+}
+
+function FloatingStatusCard({ icon, iconBg, label, stat, rotate, duration, delay = 0, className }: FloatingStatusCardProps) {
+  return (
+    <motion.div
+      animate={{ y: [0, -14, 0] }}
+      transition={{ duration, repeat: Infinity, ease: "easeInOut", delay }}
+      className={cn("absolute z-0 pointer-events-none hidden lg:block", className)}
+    >
+      <div
+        className="w-36 bg-white/10 backdrop-blur-md border border-white/25 rounded-[1.5rem] p-4 flex flex-col items-center text-center shadow-2xl"
+        style={{ transform: `rotate(${rotate}deg)` }}
+      >
+        <div className={cn("w-12 h-12 rounded-full flex items-center justify-center mb-3 border-2 border-white/40", iconBg)}>
+          {icon}
+        </div>
+        <p className="font-bold text-xs text-white">{label}</p>
+        <p className="text-[10px] text-white/70 mt-1">{stat}</p>
+      </div>
+    </motion.div>
+  );
+}
+
+const LiveBadge = () => (
+  <Link
+    href="/dashboard"
+    className="hidden md:flex absolute bottom-[6%] right-[5%] z-20 w-24 h-24 bg-[#CCFF00] rounded-full items-center justify-center shadow-xl rotate-12 hover:scale-105 transition-transform cursor-pointer border-[3px] border-black/5"
+  >
+    <div className="absolute inset-1 animate-[spin_10s_linear_infinite]">
+      <svg viewBox="0 0 100 100" className="w-full h-full">
+        <path id="chatCirclePath" d="M 50, 50 m -36, 0 a 36,36 0 1,1 72,0 a 36,36 0 1,1 -72,0" fill="none" />
+        <text className="text-[10px] font-black tracking-[0.18em] uppercase" fill="black">
+          <textPath href="#chatCirclePath" startOffset="0%">
+            OPEN DASHBOARD • OPEN DASHBOARD •
+          </textPath>
+        </text>
+      </svg>
+    </div>
+    <div className="absolute inset-0 flex items-center justify-center">
+      <ArrowRight className="w-7 h-7 text-black" strokeWidth={2.5} />
+    </div>
+  </Link>
+);
 
 interface AutoResizeProps {
   minHeight: number;
@@ -93,7 +162,6 @@ interface Props {
 }
 
 export default function RuixenMoonChat({ githubConnected, error }: Props) {
-  ReactDOM.preload(BG_URL, { as: "image" });
   const router = useRouter();
 
   const [message, setMessage] = useState("");
@@ -181,14 +249,65 @@ export default function RuixenMoonChat({ githubConnected, error }: Props) {
     (message.trim().length > 0 || files.length > 0) && !isDisabled;
 
   return (
-    <div
-      className="relative w-full h-screen bg-cover bg-center flex flex-col items-center"
-      style={{
-        backgroundImage: `url('${BG_URL}')`,
-        backgroundAttachment: "fixed",
-        backgroundColor: "#0d0f1a",
-      }}
-    >
+    <div className="relative w-full h-screen bg-[#0038FF] flex flex-col items-center overflow-hidden selection:bg-[#CCFF00] selection:text-black">
+      {/* Background grid — matches the ClubHero billboard aesthetic */}
+      <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff15_1px,transparent_1px),linear-gradient(to_bottom,#ffffff15_1px,transparent_1px)] bg-[size:4rem_4rem] pointer-events-none z-0" />
+
+      {/* Decorative hand-drawn arrows */}
+      <div className="absolute top-[10%] left-[6%] w-20 h-20 md:w-28 md:h-28 opacity-70 pointer-events-none z-0 hidden sm:block">
+        <ArrowAccentLeft />
+      </div>
+      <div className="absolute bottom-[14%] right-[6%] w-20 h-20 md:w-28 md:h-28 opacity-70 pointer-events-none z-0 hidden sm:block">
+        <ArrowAccentRight />
+      </div>
+
+      {/* Floating organ status cards */}
+      <FloatingStatusCard
+        icon={<Dna className="w-6 h-6 text-black" strokeWidth={1.5} />}
+        iconBg="bg-[#7db8ff]"
+        label="genome.helix"
+        stat="98% aligned"
+        rotate={-8}
+        duration={5}
+        className="top-[18%] left-[4%]"
+      />
+      <FloatingStatusCard
+        icon={<ShieldCheck className="w-6 h-6 text-white" strokeWidth={1.5} />}
+        iconBg="bg-[#2C3E50]"
+        label="immune.helix"
+        stat="0 threats"
+        rotate={8}
+        duration={6}
+        delay={1}
+        className="top-[20%] right-[4%]"
+      />
+      <FloatingStatusCard
+        icon={<Activity className="w-6 h-6 text-black" strokeWidth={1.5} />}
+        iconBg="bg-[#FF8A65]"
+        label="vitals.helix"
+        stat="entropy nominal"
+        rotate={-6}
+        duration={7}
+        delay={0.5}
+        className="bottom-[16%] left-[5%]"
+      />
+
+      {/* Top status pill */}
+      <motion.div
+        initial={{ opacity: 0, y: -12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        className="absolute top-6 left-1/2 -translate-x-1/2 z-20 inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-white/25 bg-white/10 backdrop-blur-sm"
+      >
+        <span className="w-1.5 h-1.5 rounded-full bg-[#CCFF00] animate-pulse" />
+        <span className="text-[10px] uppercase tracking-[0.25em] text-white/80 font-semibold">
+          System Online
+        </span>
+      </motion.div>
+
+      {/* Spinning dashboard badge */}
+      <LiveBadge />
+
       {/* Onboarding dialog — floats over this same background */}
       {showOnboarding && (
         <OnboardingDialog
@@ -196,83 +315,112 @@ export default function RuixenMoonChat({ githubConnected, error }: Props) {
           onComplete={() => router.push("/dashboard")}
         />
       )}
-      {/* ── Centre section (flex-1) — same slot as original title ── */}
-      <div className="flex-1 w-full flex flex-col items-center justify-center">
-        {/* IDLE / ERROR */}
-        {(state.stage === "idle" || state.stage === "error") && (
-          <div className="text-center">
-            <h1 className="text-4xl font-semibold text-white drop-shadow-sm">
-              HELIX
-            </h1>
-            <p className="mt-2 text-neutral-200">
-              Attach your repo — HELIX will secure it, heal it, and keep it alive.
-            </p>
-            {state.stage === "error" && (
-              <p className="mt-3 text-red-400 text-sm max-w-sm">
-                {state.message}
-              </p>
-            )}
-          </div>
-        )}
 
-        {/* REPO PARSED — ask for GitHub auth */}
-        {(state.stage === "repo-parsed" || state.stage === "connecting") && (
-          <div className="text-center flex flex-col items-center gap-5">
-            <div>
-              <p className="text-xs text-neutral-500 uppercase tracking-widest mb-1">
-                Repository detected
-              </p>
-              <h2 className="text-2xl font-semibold text-white">
-                {state.owner}/{state.repo}
-              </h2>
-              <p className="mt-2 text-neutral-400 text-sm max-w-sm">
-                HELIX needs GitHub access to read your code, detect drift, and write healing patches.
-              </p>
-            </div>
-
-            <Button
-              onClick={handleConnectGitHub}
-              disabled={state.stage === "connecting"}
-              className="flex items-center gap-2 bg-green-600 hover:bg-green-500 text-white px-6 py-2.5 rounded-lg font-medium text-sm transition-colors"
+      {/* ── Centre section (flex-1) ── */}
+      <div className="relative z-10 flex-1 w-full flex flex-col items-center justify-center px-4">
+        <AnimatePresence mode="wait">
+          {/* IDLE / ERROR */}
+          {isIdle && (
+            <motion.div
+              key="idle"
+              initial={{ opacity: 0, y: 24 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -16 }}
+              transition={{ duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }}
+              className="text-center"
             >
-              {state.stage === "connecting" ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Redirecting to GitHub…
-                </>
-              ) : (
-                <>
-                  <GitBranch className="w-4 h-4" />
-                  Authorize GitHub Access
-                </>
+              <h1
+                className="text-5xl md:text-7xl font-black uppercase tracking-tighter text-white"
+                style={{ fontFamily: '"Arial Black", Impact, sans-serif', textShadow: HEADLINE_SHADOW }}
+              >
+                HELIX
+              </h1>
+              <p className="mt-4 text-white/80 text-sm md:text-base max-w-md mx-auto font-medium">
+                Attach your repo —{" "}
+                <span className="text-[#CCFF00] font-black">HELIX</span> will
+                secure it, heal it, and keep it alive.
+              </p>
+              {state.stage === "error" && (
+                <p className="mt-3 text-red-200 text-sm max-w-sm mx-auto">
+                  {state.message}
+                </p>
               )}
-            </Button>
+            </motion.div>
+          )}
 
-            <p className="text-xs text-neutral-600">
-              Requests <span className="text-neutral-400 font-mono">repo</span> scope only — read code + branch/PR creation for patches.
-            </p>
-          </div>
-        )}
+          {/* REPO PARSED — ask for GitHub auth */}
+          {(state.stage === "repo-parsed" || state.stage === "connecting") && (
+            <motion.div
+              key="repo"
+              initial={{ opacity: 0, y: 24 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -16 }}
+              transition={{ duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }}
+              className="text-center flex flex-col items-center gap-5"
+            >
+              <div>
+                <p className="text-xs text-white/60 uppercase tracking-widest mb-1 font-bold">
+                  Repository detected
+                </p>
+                <h2 className="text-2xl md:text-3xl font-black text-white uppercase tracking-tight">
+                  {state.owner}/{state.repo}
+                </h2>
+                <p className="mt-2 text-white/70 text-sm max-w-sm mx-auto">
+                  HELIX needs GitHub access to read your code, detect drift, and write healing patches.
+                </p>
+              </div>
 
-        {/* CONNECTED — onboarding dialog handles the visual, nothing shown here */}
-        {state.stage === "connected" && null}
+              <motion.button
+                whileHover={{ scale: state.stage === "connecting" ? 1 : 1.05 }}
+                whileTap={{ scale: state.stage === "connecting" ? 1 : 0.96 }}
+                onClick={handleConnectGitHub}
+                disabled={state.stage === "connecting"}
+                className="flex items-center gap-2 bg-[#CCFF00] hover:brightness-95 text-black px-6 py-3 rounded-full font-black text-sm uppercase tracking-wide shadow-lg disabled:opacity-60 transition-[filter]"
+              >
+                {state.stage === "connecting" ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Redirecting to GitHub…
+                  </>
+                ) : (
+                  <>
+                    <GitBranch className="w-4 h-4" />
+                    Authorize GitHub Access
+                  </>
+                )}
+              </motion.button>
+
+              <p className="text-xs text-white/50">
+                Requests <span className="text-white/80 font-mono">repo</span> scope only — read code + branch/PR creation for patches.
+              </p>
+            </motion.div>
+          )}
+
+          {/* CONNECTED — onboarding dialog handles the visual, nothing shown here */}
+          {state.stage === "connected" && <motion.div key="connected" />}
+        </AnimatePresence>
       </div>
 
-      {/* ── Input section — exact same position as original (mb-[20vh]) ── */}
-      <div className="w-full max-w-3xl mb-[20vh]">
+      {/* ── Input section ── */}
+      <motion.div
+        initial={{ opacity: 0, y: 30 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, delay: 0.15, ease: [0.25, 0.46, 0.45, 0.94] }}
+        className="relative z-10 w-full max-w-3xl mb-[20vh] px-4"
+      >
         {/* Attached files strip */}
         {files.length > 0 && (
           <div className="flex flex-wrap gap-2 mb-2">
             {files.map((f, i) => (
               <div
                 key={i}
-                className="flex items-center gap-1.5 bg-black/60 border border-neutral-700 rounded-lg px-2.5 py-1.5 text-xs text-neutral-300"
+                className="flex items-center gap-1.5 bg-[#001A99]/60 border border-white/20 rounded-full px-3 py-1.5 text-xs text-white/90"
               >
-                <FileText className="w-3 h-3 text-neutral-400" />
+                <FileText className="w-3 h-3 text-white/70" />
                 <span className="max-w-[120px] truncate">{f.name}</span>
                 <button
                   onClick={() => removeFile(i)}
-                  className="ml-0.5 text-neutral-500 hover:text-red-400 transition-colors"
+                  className="ml-0.5 text-white/60 hover:text-[#CCFF00] transition-colors"
                 >
                   <X className="w-3 h-3" />
                 </button>
@@ -281,7 +429,7 @@ export default function RuixenMoonChat({ githubConnected, error }: Props) {
           </div>
         )}
 
-        <div className="relative bg-black/60 backdrop-blur-md rounded-xl border border-neutral-700 focus-within:border-green-500/40 transition-colors">
+        <div className="relative bg-[#1A0B3D]/70 backdrop-blur-md rounded-[1.75rem] border border-[#B084FF]/30 focus-within:border-[#CCFF00]/70 shadow-2xl transition-colors">
           <Textarea
             ref={textareaRef}
             value={message}
@@ -297,16 +445,16 @@ export default function RuixenMoonChat({ githubConnected, error }: Props) {
             }
             disabled={isDisabled || !isIdle}
             className={cn(
-              "w-full px-4 py-3 resize-none border-none",
+              "w-full px-5 py-4 resize-none border-none",
               "bg-transparent text-white text-sm",
               "focus-visible:ring-0 focus-visible:ring-offset-0",
-              "placeholder:text-neutral-400 min-h-[48px]",
+              "placeholder:text-white/50 min-h-[48px]",
               "disabled:opacity-50",
             )}
             style={{ overflow: "hidden" }}
           />
 
-          <div className="flex items-center justify-between p-3">
+          <div className="flex items-center justify-between px-3 pb-3">
             <div className="flex items-center gap-1">
               <input
                 ref={fileInputRef}
@@ -320,54 +468,60 @@ export default function RuixenMoonChat({ githubConnected, error }: Props) {
                 size="icon"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isDisabled || !isIdle}
-                className="text-white hover:bg-neutral-700 disabled:opacity-40"
+                className="text-white hover:bg-white/10 disabled:opacity-40 rounded-full"
               >
                 <Paperclip className="w-4 h-4" />
               </Button>
             </div>
 
-            <Button
+            <motion.button
+              whileHover={canSend ? { scale: 1.08 } : {}}
+              whileTap={canSend ? { scale: 0.94 } : {}}
               onClick={handleSend}
               disabled={!canSend}
               className={cn(
-                "flex items-center gap-1 px-3 py-2 rounded-lg transition-colors",
+                "flex items-center justify-center w-9 h-9 rounded-full transition-colors",
                 canSend
-                  ? "bg-green-600 hover:bg-green-500 text-white"
-                  : "bg-neutral-700 text-neutral-400 cursor-not-allowed",
+                  ? "bg-[#CCFF00] text-black hover:brightness-95"
+                  : "bg-white/10 text-white/40 cursor-not-allowed",
               )}
             >
               <ArrowUpIcon className="w-4 h-4" />
               <span className="sr-only">Send</span>
-            </Button>
+            </motion.button>
           </div>
         </div>
 
-        {/* Quick Actions — only in idle, same layout as original */}
+        {/* Quick Actions — only in idle */}
         {isIdle && (
           <div className="flex items-center justify-center flex-wrap gap-3 mt-6">
             <QuickAction
               icon={<ShieldCheck className="w-4 h-4" />}
               label="Analyze Security"
+              accent="#7db8ff"
               onClick={() => handleQuickAction("github.com/")}
             />
             <QuickAction
               icon={<Dna className="w-4 h-4" />}
               label="Genome Drift"
+              accent="#CCFF00"
               onClick={() => handleQuickAction("github.com/")}
             />
             <QuickAction
               icon={<Activity className="w-4 h-4" />}
               label="Immunity Report"
+              accent="#FF8A65"
               onClick={() => handleQuickAction("github.com/")}
             />
             <QuickAction
               icon={<Flame className="w-4 h-4" />}
               label="Entropy Check"
+              accent="#FFD166"
               onClick={() => handleQuickAction("github.com/")}
             />
           </div>
         )}
-      </div>
+      </motion.div>
     </div>
   );
 }
@@ -375,18 +529,21 @@ export default function RuixenMoonChat({ githubConnected, error }: Props) {
 interface QuickActionProps {
   icon: React.ReactNode;
   label: string;
+  accent: string;
   onClick?: () => void;
 }
 
-function QuickAction({ icon, label, onClick }: QuickActionProps) {
+function QuickAction({ icon, label, accent, onClick }: QuickActionProps) {
   return (
-    <Button
-      variant="outline"
+    <motion.button
+      whileHover={{ scale: 1.05 }}
+      whileTap={{ scale: 0.96 }}
       onClick={onClick}
-      className="flex items-center gap-2 rounded-full border-neutral-700 bg-black/50 text-neutral-300 hover:text-white hover:bg-neutral-700"
+      style={{ color: accent }}
+      className="flex items-center gap-2 rounded-full border border-white/30 bg-white/10 px-4 py-2 text-white/90 hover:bg-white/20 transition-colors"
     >
-      {icon}
-      <span className="text-xs">{label}</span>
-    </Button>
+      <span style={{ color: accent }}>{icon}</span>
+      <span className="text-xs font-semibold text-white/90">{label}</span>
+    </motion.button>
   );
 }

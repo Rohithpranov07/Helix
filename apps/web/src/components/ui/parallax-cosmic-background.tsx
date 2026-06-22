@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { motion } from "motion/react";
 
 interface CosmicParallaxBgProps {
   head: string;
@@ -52,7 +53,20 @@ const CosmicParallaxBg: React.FC<CosmicParallaxBgProps> = ({
       </div>
       <div id="earth" />
 
-      <div id="title">{head.toUpperCase()}</div>
+      {/* Per-letter text reveal — each glyph decodes up from blur, staggered */}
+      <div id="title" style={{ animation: "none" }}>
+        {head.toUpperCase().split("").map((ch, i) => (
+          <motion.span
+            key={i}
+            style={{ display: "inline-block", willChange: "transform, filter, opacity" }}
+            initial={{ opacity: 0, y: "0.6em", filter: "blur(16px)" }}
+            animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+            transition={{ delay: 0.25 + i * 0.09, duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
+          >
+            {ch}
+          </motion.span>
+        ))}
+      </div>
       <div id="subtitle">
         {textParts.map((part, index) => (
           <React.Fragment key={index}>

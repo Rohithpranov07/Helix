@@ -114,7 +114,9 @@ async function collectEvents(since: Date): Promise<ActivityEvent[]> {
   return events.sort((a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime());
 }
 
-export async function GET(request: Request) {
+import { withRateLimit, LIMITS } from "@/lib/apiRateLimit";
+
+const handler = async (request: Request) => {
   const encoder = new TextEncoder();
   const signal = request.signal;
 
@@ -171,4 +173,6 @@ export async function GET(request: Request) {
       Connection: "keep-alive",
     },
   });
-}
+};
+
+export const GET = withRateLimit(LIMITS.SSE, handler as (req: import("next/server").NextRequest, ctx: { params: Promise<Record<string, string>> }) => Promise<Response>);

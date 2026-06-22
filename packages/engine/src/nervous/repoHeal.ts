@@ -20,7 +20,7 @@
  *   - Shadow invariant enforced: files are written to shadow branch only; no production write until PR is merged.
  */
 
-import type { IncidentPatch, CausalStep } from "@helix/shared";
+import { ExternalApiError, type IncidentPatch, type CausalStep } from "@helix/shared";
 import {
   connectDb,
   findGitHubConnection,
@@ -359,7 +359,7 @@ export async function approveIncidentPatch(
 
   // Write each patched file to shadow branch
   for (const file of patch.files) {
-    const current = await readFile(token, owner, repo, file.path);
+    const current = await readFile(token, owner, repo, file.path, shadowBranch);
     await writeFile(
       token,
       owner,
@@ -375,15 +375,51 @@ export async function approveIncidentPatch(
   // Build PR body
   const prBody = buildPRBody(patch);
 
-  const pr = await createPR(
-    token,
-    owner,
-    repo,
-    shadowBranch,
-    defaultBranch,
-    `[HELIX Reflex] Railway failure fix — ${patch.failureSummary.slice(0, 60)}`,
-    prBody,
-  );
+  let pr;
+  try {
+    pr = await createPR(
+      token,
+      owner,
+      repo,
+      shadowBranch,
+      defaultBranch,
+      `[HELIX Reflex] Railway failure fix — ${patch.failureSummary.slice(0, 60)}`,
+      prBody,
+    );
+  } catch (err: any) {
+    if (err instanceof ExternalApiError && err.message.includes("no history in common")) {
+      // Recreate branch from the new head since history was rewritten
+      const headSha = await getDefaultBranchSha(token, owner, repo, defaultBranch);
+      shadowBranch = `helix-reflex-${Date.now()}`;
+      await createBranch(token, owner, repo, shadowBranch, headSha);
+
+      for (const file of patch.files) {
+        const current = await readFile(token, owner, repo, file.path, shadowBranch);
+        await writeFile(
+          token,
+          owner,
+          repo,
+          file.path,
+          file.newContent,
+          `fix(reflex): repair Railway deployment failure — ${file.path}`,
+          shadowBranch,
+          current?.sha,
+        );
+      }
+
+      pr = await createPR(
+        token,
+        owner,
+        repo,
+        shadowBranch,
+        defaultBranch,
+        `[HELIX Reflex] Railway failure fix — ${patch.failureSummary.slice(0, 60)}`,
+        prBody,
+      );
+    } else {
+      throw err;
+    }
+  }
 
   const updated = await updateIncidentPatch(patchId, {
     status: "pr_created",

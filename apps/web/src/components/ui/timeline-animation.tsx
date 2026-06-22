@@ -8,8 +8,17 @@ export interface TimelineContentProps {
   animationNum?: number;
   timelineRef?: React.RefObject<HTMLElement | null>;
   className?: string;
-  customVariants?: (i: number) => any;
+  customVariants?: {
+    visible: (i: number) => Record<string, unknown>;
+    hidden: Record<string, unknown>;
+  };
   children?: React.ReactNode;
+  // Intentional `any`: this is a polymorphic component (`as` can render any tag),
+  // so it must accept arbitrary passthrough attributes (href, target, aria-*, ...).
+  // A `Record<string, unknown>` intersection here triggers a TS 5.9 inference bug
+  // that collapses every destructured binding below to `{}` — verified by testing
+  // in isolation. `any` is the deliberate, narrower-than-the-alternative choice.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   [key: string]: any;
 }
 
@@ -17,16 +26,14 @@ const defaultVariants = {
   visible: (i: number) => ({
     y: 0,
     opacity: 1,
-    filter: "blur(0px)",
     transition: {
-      delay: i * 0.15,
-      duration: 0.6,
-      ease: [0.25, 0.4, 0.25, 1],
+      delay: i * 0.1,
+      duration: 0.45,
+      ease: [0.25, 0.46, 0.45, 0.94],
     },
   }),
   hidden: {
-    filter: "blur(10px)",
-    y: 20,
+    y: 16,
     opacity: 0,
   },
 };
@@ -45,13 +52,13 @@ export const TimelineContent = React.forwardRef<HTMLElement, TimelineContentProp
     ref
   ) => {
     // If timelineRef is not provided, use our own ref for scroll detection
-    const internalRef = React.useRef<HTMLElement>(null);
-    const viewRef = timelineRef || internalRef;
-    
-    // We only trigger once when the referenced container comes into view
-    const isInView = useInView(viewRef as any, { once: true, margin: "-10% 0px" });
+    const internalRef = React.useRef<HTMLElement | null>(null);
+    const viewRef: React.RefObject<HTMLElement | null> = timelineRef ?? internalRef;
 
-    const MotionComponent = React.useMemo(() => motion.create(Component as any), [Component]);
+    // We only trigger once when the referenced container comes into view
+    const isInView = useInView(viewRef, { once: true, margin: "-10% 0px" });
+
+    const MotionComponent = React.useMemo(() => motion.create(Component as ElementType), [Component]);
     const variants = customVariants ? {
       visible: customVariants.visible,
       hidden: customVariants.hidden || defaultVariants.hidden,
@@ -59,10 +66,10 @@ export const TimelineContent = React.forwardRef<HTMLElement, TimelineContentProp
 
     return (
       <MotionComponent
-        ref={(node: any) => {
+        ref={(node: HTMLElement | null) => {
           if (typeof ref === "function") ref(node);
-          else if (ref) (ref as React.MutableRefObject<any>).current = node;
-          if (!timelineRef) (internalRef as any).current = node;
+          else if (ref) ref.current = node;
+          if (!timelineRef) internalRef.current = node;
         }}
         custom={animationNum}
         initial="hidden"

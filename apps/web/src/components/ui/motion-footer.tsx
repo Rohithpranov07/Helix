@@ -20,19 +20,31 @@ const STYLES = `
 .cinematic-footer-wrapper {
   font-family: 'Plus Jakarta Sans', sans-serif;
   -webkit-font-smoothing: antialiased;
-  
-  /* Dynamic Variables using standard shadcn/tailwind v4 tokens */
+
+  /* Light theme tokens, scoped locally so the footer stays bright even when
+     an ancestor page carries the .dark class (shared with the incidents page). */
+  --foreground: oklch(0.18 0 0);
+  --background: oklch(0.99 0 0);
+  --primary: oklch(0.55 0.18 150);
+  --secondary: oklch(0.6 0.2 290);
+  --destructive: oklch(0.6 0.21 25);
+  --muted-foreground: oklch(0.45 0 0);
+  --border: oklch(0.9 0 0);
+
+  /* Dynamic Variables using standard shadcn/tailwind v4 tokens.
+     Pill shadows stay dark/black-based regardless of theme — elevation
+     shadows on a light surface still need to be dark to read as depth. */
   --pill-bg-1: color-mix(in oklch, var(--foreground) 3%, transparent);
   --pill-bg-2: color-mix(in oklch, var(--foreground) 1%, transparent);
-  --pill-shadow: color-mix(in oklch, var(--background) 50%, transparent);
+  --pill-shadow: rgba(15, 23, 42, 0.16);
   --pill-highlight: color-mix(in oklch, var(--foreground) 10%, transparent);
-  --pill-inset-shadow: color-mix(in oklch, var(--background) 80%, transparent);
+  --pill-inset-shadow: rgba(15, 23, 42, 0.06);
   --pill-border: color-mix(in oklch, var(--foreground) 8%, transparent);
-  
+
   --pill-bg-1-hover: color-mix(in oklch, var(--foreground) 8%, transparent);
   --pill-bg-2-hover: color-mix(in oklch, var(--foreground) 2%, transparent);
   --pill-border-hover: color-mix(in oklch, var(--foreground) 20%, transparent);
-  --pill-shadow-hover: color-mix(in oklch, var(--background) 70%, transparent);
+  --pill-shadow-hover: rgba(15, 23, 42, 0.22);
   --pill-highlight-hover: color-mix(in oklch, var(--foreground) 20%, transparent);
 }
 
@@ -74,13 +86,12 @@ const STYLES = `
   -webkit-mask-image: linear-gradient(to bottom, transparent, black 30%, black 70%, transparent);
 }
 
-/* Theme-adaptive Aurora Glow */
+/* Aurora Glow — Apple-quiet: a single barely-there warm neutral light */
 .footer-aurora {
   background: radial-gradient(
-    circle at 50% 50%, 
-    color-mix(in oklch, var(--primary) 15%, transparent) 0%, 
-    color-mix(in oklch, var(--secondary) 15%, transparent) 40%, 
-    transparent 70%
+    circle at 50% 50%,
+    rgba(0, 0, 0, 0.03) 0%,
+    transparent 68%
   );
 }
 
@@ -106,18 +117,31 @@ const STYLES = `
   color: var(--foreground);
 }
 
-/* Giant Background Text Masking */
+/* Giant Background Text — quiet warm-grey watermark, no colour */
 .footer-giant-bg-text {
   font-size: 28vw;
   line-height: 0.8;
   font-weight: 900;
   letter-spacing: -0.05em;
   color: transparent;
-  -webkit-text-stroke: 1px color-mix(in oklch, var(--foreground) 15%, transparent);
-  background: linear-gradient(180deg, color-mix(in oklch, var(--foreground) 25%, transparent) 0%, transparent 90%);
+  -webkit-text-stroke: 1px rgba(29, 29, 31, 0.06);
+  background: linear-gradient(180deg, rgba(29, 29, 31, 0.07) 0%, transparent 86%);
   -webkit-background-clip: text;
   background-clip: text;
 }
+
+/* Primary CTA — Apple solid near-black, white text, no glow */
+.footer-cta-primary {
+  background: #1d1d1f;
+  color: #ffffff;
+  border: 1px solid #1d1d1f;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.footer-cta-primary:hover {
+  background: #000000;
+  transform: scale(1.01);
+}
+.footer-cta-primary svg { color: #ffffff; }
 
 /* Metallic Text Glow */
 .footer-text-glow {
@@ -139,7 +163,7 @@ export type MagneticButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> 
 
 const MagneticButton = React.forwardRef<HTMLElement, MagneticButtonProps>(
   ({ className, children, as: Component = "button", ...props }, forwardedRef) => {
-    const localRef = useRef<HTMLElement>(null);
+    const localRef = useRef<HTMLElement | null>(null);
 
     useEffect(() => {
       if (typeof window === "undefined") return;
@@ -147,8 +171,14 @@ const MagneticButton = React.forwardRef<HTMLElement, MagneticButtonProps>(
       if (!element) return;
 
       const ctx = gsap.context(() => {
+        // Cache bounds on enter so mousemove never reads layout (avoids
+        // getBoundingClientRect → transform-write thrash on every pointer move).
+        let rect: DOMRect | null = null;
+        const handleMouseEnter = () => {
+          rect = element.getBoundingClientRect();
+        };
         const handleMouseMove = (e: MouseEvent) => {
-          const rect = element.getBoundingClientRect();
+          if (!rect) return;
           const h = rect.width / 2;
           const w = rect.height / 2;
           const x = e.clientX - rect.left - h;
@@ -166,6 +196,7 @@ const MagneticButton = React.forwardRef<HTMLElement, MagneticButtonProps>(
         };
 
         const handleMouseLeave = () => {
+          rect = null;
           gsap.to(element, {
             x: 0,
             y: 0,
@@ -177,11 +208,13 @@ const MagneticButton = React.forwardRef<HTMLElement, MagneticButtonProps>(
           });
         };
 
-        element.addEventListener("mousemove", handleMouseMove as any);
+        element.addEventListener("mouseenter", handleMouseEnter);
+        element.addEventListener("mousemove", handleMouseMove);
         element.addEventListener("mouseleave", handleMouseLeave);
 
         return () => {
-          element.removeEventListener("mousemove", handleMouseMove as any);
+          element.removeEventListener("mouseenter", handleMouseEnter);
+          element.removeEventListener("mousemove", handleMouseMove);
           element.removeEventListener("mouseleave", handleMouseLeave);
         };
       }, element);
@@ -192,9 +225,9 @@ const MagneticButton = React.forwardRef<HTMLElement, MagneticButtonProps>(
     return (
       <Component
         ref={(node: HTMLElement) => {
-          (localRef as any).current = node;
+          localRef.current = node;
           if (typeof forwardedRef === "function") forwardedRef(node);
-          else if (forwardedRef) (forwardedRef as any).current = node;
+          else if (forwardedRef) forwardedRef.current = node;
         }}
         className={cn("cursor-pointer", className)}
         {...props}
@@ -210,12 +243,12 @@ MagneticButton.displayName = "MagneticButton";
 // 3. MAIN COMPONENT
 // -------------------------------------------------------------------------
 const MarqueeItem = () => (
-  <div className="flex items-center space-x-12 px-6">
-    <span>Autonomic Architecture</span> <span className="text-primary/60">✦</span>
-    <span>Real-Time Vitals</span> <span className="text-secondary/60">✦</span>
-    <span>Genome Drift Protection</span> <span className="text-primary/60">✦</span>
-    <span>Shadow Proofs</span> <span className="text-secondary/60">✦</span>
-    <span>Absolute Reliability</span> <span className="text-primary/60">✦</span>
+  <div className="flex items-center space-x-10 px-5">
+    <span>Autonomic Architecture</span> <span className="text-[#cabfa9]">/</span>
+    <span>Real-Time Vitals</span> <span className="text-[#cabfa9]">/</span>
+    <span>Genome Drift Protection</span> <span className="text-[#cabfa9]">/</span>
+    <span>Shadow Proofs</span> <span className="text-[#cabfa9]">/</span>
+    <span>Absolute Reliability</span> <span className="text-[#cabfa9]">/</span>
   </div>
 );
 
@@ -290,7 +323,7 @@ export function CinematicFooter() {
         style={{ clipPath: "polygon(0% 0, 100% 0%, 100% 100%, 0 100%)" }}
       >
         {/* The actual footer stays fixed to the viewport underneath everything */}
-        <footer className="fixed bottom-0 left-0 flex h-screen w-full flex-col justify-between overflow-hidden bg-background text-foreground cinematic-footer-wrapper">
+        <footer className="fixed bottom-0 left-0 flex h-screen w-full flex-col justify-between overflow-hidden text-foreground cinematic-footer-wrapper" style={{ background: "radial-gradient(60% 45% at 50% 0%, rgba(92,64,32,0.04) 0%, transparent 62%), linear-gradient(180deg, #f6efe2 0%, #efe5d3 60%, #e7dac4 100%)" }}>
           
           {/* Ambient Light & Grid Background */}
           <div className="footer-aurora absolute left-1/2 top-1/2 h-[60vh] w-[80vw] -translate-x-1/2 -translate-y-1/2 animate-footer-breathe rounded-[50%] blur-[80px] pointer-events-none z-0" />
@@ -304,9 +337,9 @@ export function CinematicFooter() {
             HELIX
           </div>
 
-          {/* 1. Diagonal Sleek Marquee (Top of footer) */}
-          <div className="absolute top-12 left-0 w-full overflow-hidden border-y border-border/50 bg-background/60 backdrop-blur-md py-4 z-10 -rotate-2 scale-110 shadow-2xl">
-            <div className="flex w-max animate-footer-scroll-marquee text-xs md:text-sm font-bold tracking-[0.3em] text-muted-foreground uppercase">
+          {/* 1. Quiet Marquee (Top of footer) */}
+          <div className="absolute top-14 left-0 w-full overflow-hidden border-y border-[#5c4020]/10 py-3.5 z-10">
+            <div className="flex w-max animate-footer-scroll-marquee text-[11px] md:text-xs font-medium tracking-[0.22em] text-[#8a8170] uppercase">
               <MarqueeItem />
               <MarqueeItem />
             </div>
@@ -314,19 +347,25 @@ export function CinematicFooter() {
 
           {/* 2. Main Center Content */}
           <div className="relative z-10 flex flex-1 flex-col items-center justify-center px-6 mt-20 w-full max-w-5xl mx-auto">
+            <p className="mb-5 text-xs font-medium uppercase tracking-[0.28em] text-[#8a8170]">
+              HELIX
+            </p>
             <h2
               ref={headingRef}
-              className="text-5xl md:text-8xl font-black footer-text-glow tracking-tighter mb-12 text-center"
+              className="text-5xl md:text-8xl font-semibold tracking-[-0.03em] mb-6 text-center text-[#221c12]"
             >
               Analyze deeper.
             </h2>
+            <p className="mb-12 max-w-md text-center text-base md:text-lg leading-relaxed text-[#6f675a]">
+              Keep every reflex arc, immune response, and genome drift aligned over time.
+            </p>
 
             {/* Interactive Magnetic Pills Layout */}
             <div ref={linksRef} className="flex flex-col items-center gap-6 w-full">
               {/* Primary Actions */}
               <div className="flex flex-wrap justify-center gap-4 w-full">
-                <MagneticButton as="a" href="#" className="footer-glass-pill px-10 py-5 rounded-full text-foreground font-bold text-sm md:text-base flex items-center gap-3 group">
-                  <svg className="w-6 h-6 text-muted-foreground group-hover:text-foreground transition-colors" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                <MagneticButton as="a" href="#" className="footer-cta-primary px-10 py-5 rounded-full font-bold text-sm md:text-base flex items-center gap-3 group">
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
                     <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
                   </svg>
                   Connect API

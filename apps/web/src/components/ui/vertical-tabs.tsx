@@ -118,7 +118,7 @@ export function VerticalTabs({ onComplete, indexed }: { onComplete?: () => void;
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-            className="rounded-2xl border border-white/[0.07] bg-[#0e0e12] overflow-hidden"
+            className="rounded-2xl border border-black/7 bg-white/85 backdrop-blur-xl shadow-[0_1px_2px_rgba(15,23,42,0.04),0_30px_70px_-40px_rgba(15,23,42,0.3)] overflow-hidden"
           >
             <div className="flex flex-col items-center justify-center py-14 px-8 text-center">
               {/* Glow ring */}
@@ -147,7 +147,7 @@ export function VerticalTabs({ onComplete, indexed }: { onComplete?: () => void;
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.2 }}
-                className="text-[22px] font-semibold text-white tracking-tight mb-2"
+                className="text-[22px] font-semibold text-[#1d1d1f] tracking-tight mb-2"
               >
                 {indexed != null ? `${indexed} modules indexed` : "Genome baseline ready"}
               </motion.h3>
@@ -156,7 +156,7 @@ export function VerticalTabs({ onComplete, indexed }: { onComplete?: () => void;
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.28 }}
-                className="text-[#6a6a6f] text-sm leading-relaxed max-w-sm mb-8"
+                className="text-[#6e6e73] text-sm leading-relaxed max-w-sm mb-8"
               >
                 Baseline established. Authorize GitHub to complete the connection and activate drift monitoring.
               </motion.p>
@@ -173,9 +173,9 @@ export function VerticalTabs({ onComplete, indexed }: { onComplete?: () => void;
                     <div className="w-5 h-5 rounded-full border border-emerald-500/40 bg-emerald-500/10 flex items-center justify-center">
                       <Check className="size-2.5 text-emerald-400" />
                     </div>
-                    <span className="text-[11px] text-[#5a5a5f] font-medium">{step.title}</span>
+                    <span className="text-[11px] text-[#6e6e73] font-medium">{step.title}</span>
                     {i < AGENT_STEPS.length - 1 && (
-                      <div className="w-4 h-[1px] bg-white/10 ml-2" />
+                      <div className="w-4 h-[1px] bg-black/10 ml-2" />
                     )}
                   </div>
                 ))}
@@ -202,20 +202,20 @@ export function VerticalTabs({ onComplete, indexed }: { onComplete?: () => void;
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="rounded-2xl border border-white/[0.07] bg-[#0e0e12] overflow-hidden"
+            className="rounded-2xl border border-black/7 bg-white/85 backdrop-blur-xl shadow-[0_1px_2px_rgba(15,23,42,0.04),0_30px_70px_-40px_rgba(15,23,42,0.3)] overflow-hidden"
           >
             <div className="grid grid-cols-1 lg:grid-cols-12 h-[520px]">
 
               {/* ── LEFT COLUMN: Steps ── */}
-              <div className="lg:col-span-5 flex flex-col h-full border-r border-white/[0.05] bg-[#0c0c10]">
+              <div className="lg:col-span-5 flex flex-col h-full border-r border-black/6 bg-white/60">
 
                 {/* Header */}
-                <div className="px-8 pt-8 pb-6 border-b border-white/[0.04]">
+                <div className="px-8 pt-8 pb-6 border-b border-black/6">
                   <span className="text-[10px] font-bold tracking-[0.28em] uppercase mb-1.5 block"
                     style={{ color: AccentColor }}>
                     AI Agent Pipeline
                   </span>
-                  <h2 className="text-xl font-semibold text-white tracking-tight leading-snug">
+                  <h2 className="text-xl font-semibold text-[#1d1d1f] tracking-tight leading-snug">
                     Processing request
                   </h2>
                 </div>
@@ -223,7 +223,7 @@ export function VerticalTabs({ onComplete, indexed }: { onComplete?: () => void;
                 {/* Steps */}
                 <div className="flex-1 flex flex-col px-8 py-6 gap-0 relative overflow-hidden">
                   {/* Connector line running through all circles */}
-                  <div className="absolute left-[39px] top-[34px] bottom-[34px] w-[1px] bg-white/[0.06]" />
+                  <div className="absolute left-[39px] top-[34px] bottom-[34px] w-[1px] bg-black/8" />
 
                   {AGENT_STEPS.map((step, index) => {
                     const isActive = activeIndex === index;
@@ -249,12 +249,12 @@ export function VerticalTabs({ onComplete, indexed }: { onComplete?: () => void;
                               ? AccentColor
                               : isPast
                               ? "#10b981"
-                              : "rgba(255,255,255,0.08)",
+                              : "rgba(15,23,42,0.12)",
                             background: isActive
                               ? `${AccentColor}14`
                               : isPast
                               ? "rgba(16,185,129,0.1)"
-                              : "rgba(255,255,255,0.02)",
+                              : "rgba(15,23,42,0.03)",
                             boxShadow: isActive
                               ? `0 0 14px ${AccentColor}35`
                               : undefined,
@@ -270,7 +270,7 @@ export function VerticalTabs({ onComplete, indexed }: { onComplete?: () => void;
                               style={{ background: AccentColor }}
                             />
                           ) : (
-                            <Icon className="size-3 text-white/20" />
+                            <Icon className="size-3 text-slate-400" />
                           )}
                         </div>
 
@@ -280,10 +280,10 @@ export function VerticalTabs({ onComplete, indexed }: { onComplete?: () => void;
                             className={cn(
                               "block text-[15px] font-semibold tracking-tight transition-colors duration-300 leading-snug",
                               isActive
-                                ? "text-white"
+                                ? "text-[#1d1d1f]"
                                 : isPast
-                                ? "text-emerald-400/70"
-                                : "text-white/20 group-hover:text-white/40"
+                                ? "text-emerald-600/80"
+                                : "text-slate-400 group-hover:text-slate-600"
                             )}
                           >
                             {step.title}
@@ -296,7 +296,7 @@ export function VerticalTabs({ onComplete, indexed }: { onComplete?: () => void;
                                 animate={{ opacity: 1, height: "auto", marginTop: 4 }}
                                 exit={{ opacity: 0, height: 0, marginTop: 0 }}
                                 transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-                                className="text-[12.5px] text-[#5a5a5f] leading-relaxed overflow-hidden"
+                                className="text-[12.5px] text-[#6e6e73] leading-relaxed overflow-hidden"
                               >
                                 {step.description}
                               </motion.p>
@@ -311,7 +311,7 @@ export function VerticalTabs({ onComplete, indexed }: { onComplete?: () => void;
                 {/* Bottom progress bar */}
                 <div className="px-8 pb-7 pt-0">
                   <div className="flex items-center justify-between mb-2.5">
-                    <span className="text-[11px] text-white/20 tabular-nums">
+                    <span className="text-[11px] text-slate-400 tabular-nums">
                       Step {activeIndex + 1} / {AGENT_STEPS.length}
                     </span>
                     <div className="flex items-center gap-1.5">
@@ -329,13 +329,13 @@ export function VerticalTabs({ onComplete, indexed }: { onComplete?: () => void;
                                 ? AccentColor
                                 : i < activeIndex
                                 ? "#10b981"
-                                : "rgba(255,255,255,0.08)",
+                                : "rgba(15,23,42,0.12)",
                           }}
                         />
                       ))}
                     </div>
                   </div>
-                  <div className="h-[2px] rounded-full bg-white/[0.05] overflow-hidden">
+                  <div className="h-[2px] rounded-full bg-black/[0.07] overflow-hidden">
                     <motion.div
                       key={`bar-${activeIndex}`}
                       className="h-full rounded-full origin-left"

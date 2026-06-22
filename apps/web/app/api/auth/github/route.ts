@@ -11,8 +11,9 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   const clientId = process.env["GITHUB_CLIENT_ID"];
+  const { origin } = new URL(request.url);
   const callbackUrl =
-    process.env["GITHUB_CALLBACK_URL"] ?? "http://localhost:3000/api/auth/github/callback";
+    process.env["GITHUB_CALLBACK_URL"] ?? `${origin}/api/auth/github/callback`;
 
   if (!clientId) {
     return NextResponse.json(
