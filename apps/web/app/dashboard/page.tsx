@@ -65,19 +65,38 @@ const fadeUp: Variants = {
 
 function Counter({ value, suffix = "" }: { value: number; suffix?: string }) {
   const [display, setDisplay] = useState(0);
-  const ran = useRef(false);
+  const reduce = useReducedMotion();
+  // Track the currently shown number so re-animations tween from where we are,
+  // not always from 0 — and so the count-up RE-RUNS whenever `value` changes
+  // (e.g. demo -> real data on first load, or live updates on each poll).
+  const displayRef = useRef(0);
+  const rafRef = useRef<number | null>(null);
+
   useEffect(() => {
-    if (ran.current) return;
-    ran.current = true;
-    const start = Date.now();
+    if (reduce) {
+      displayRef.current = value;
+      setDisplay(value);
+      return;
+    }
+    const from = displayRef.current;
+    const to = value;
+    if (from === to) return;
+    const start = performance.now();
     const dur = 900;
-    const tick = () => {
-      const p = Math.min((Date.now() - start) / dur, 1);
-      setDisplay(Math.round((1 - Math.pow(1 - p, 3)) * value));
-      if (p < 1) requestAnimationFrame(tick);
+    const tick = (now: number) => {
+      const p = Math.min((now - start) / dur, 1);
+      const eased = 1 - Math.pow(1 - p, 3);
+      const cur = Math.round(from + (to - from) * eased);
+      displayRef.current = cur;
+      setDisplay(cur);
+      if (p < 1) rafRef.current = requestAnimationFrame(tick);
     };
-    requestAnimationFrame(tick);
-  }, [value]);
+    rafRef.current = requestAnimationFrame(tick);
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
+  }, [value, reduce]);
+
   return <span>{display}{suffix}</span>;
 }
 
@@ -225,25 +244,38 @@ function StatChip({ stat, index }: { stat: Stat; index: number }) {
   );
 }
 
-function StatsStrip({ v }: { v: VitalsData }) {
+function StatsStrip({ vitals, demoMode }: { vitals: VitalsData | null; demoMode: boolean }) {
+  // Show demo numbers ONLY when the DB is confirmed offline. While the first
+  // fetch is still in flight (vitals === null, not demoMode), show real zeros
+  // rather than flashing the demo figures — these cards reflect the live DB.
+  const src: VitalsData = demoMode ? DEMO : (vitals ?? {
+    entropy: null,
+    immune: { open: 0, healed: 0, total: 0 },
+    genome: { pairingPct: null, avgScore: null, totalUnpaired: 0, modules: 0, paired: 0 },
+    nervous: { total: 0, resolved: 0, recent: [] },
+    memory: { antibodies: 0, recurrencesBlocked: 0 },
+    shadow: null,
+    heartRate: { deploysPerDay: 0, incidentsPerDay: 0 },
+    metabolism: null,
+  });
   const stats: Stat[] = [
     {
-      label: "Antibodies", value: v.memory.antibodies, num: true, icon: Cpu,
+      label: "Antibodies", value: src.memory.antibodies, num: true, icon: Cpu,
       color: "#c2a14e",
       grad: "linear-gradient(112deg, #8c6d28 0%, #b8943f 40%, #d8be7e 74%, #f1e3bd 100%)",
     },
     {
-      label: "Vulns Healed", value: v.immune.healed, num: true, icon: ShieldCheck,
+      label: "Vulns Healed", value: src.immune.healed, num: true, icon: ShieldCheck,
       color: "#3f9b7e",
       grad: "linear-gradient(112deg, #1d6452 0%, #3a8f74 40%, #79c2a4 74%, #c6e6d6 100%)",
     },
     {
-      label: "Incidents Resolved", value: `${v.nervous.resolved}/${v.nervous.total}`, num: false, icon: Zap,
+      label: "Incidents Resolved", value: `${src.nervous.resolved}/${src.nervous.total}`, num: false, icon: Zap,
       color: "#c46b6f",
       grad: "linear-gradient(112deg, #8f4148 0%, #b76368 40%, #dd9690 74%, #f2d2c7 100%)",
     },
     {
-      label: "Shadow Promoted", value: v.shadow ? `${v.shadow.promoted}/${v.shadow.total}` : "—", num: false, icon: Lock,
+      label: "Shadow Promoted", value: src.shadow ? `${src.shadow.promoted}/${src.shadow.total}` : "0/0", num: false, icon: Lock,
       color: "#6d5fb3",
       grad: "linear-gradient(112deg, #443a7d 0%, #6253a6 40%, #978ad0 74%, #d6cdee 100%)",
     },
@@ -659,8 +691,6 @@ export default function DashboardPage() {
     return () => { clearInterval(id); abortRef.current?.abort(); };
   }, [load]);
 
-  const v = vitals ?? DEMO;
-
   return (
       <div className="relative text-slate-900 min-h-screen">
         {/* Ambient background — Editorial-Luxury warm cream canvas. Its own fixed,
@@ -792,7 +822,7 @@ export default function DashboardPage() {
             </div>
 
             {/* ── Stats strip ── */}
-            <StatsStrip v={v} />
+            <StatsStrip vitals={vitals} demoMode={demoMode} />
 
             {/* ── Bento Grid — cinematic image-led organ tiles ── */}
             <div className="grid grid-cols-1 md:grid-cols-4 auto-rows-[230px] md:auto-rows-[264px] gap-3 md:gap-4">
