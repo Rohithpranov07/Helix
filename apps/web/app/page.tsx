@@ -92,7 +92,7 @@ export default function LandingPage() {
         {/* Get Started button — anchored to sphere surface below subtitle */}
         <div className="absolute inset-0 z-10 flex items-end justify-center pb-[5%] pointer-events-none">
           <motion.button
-            onClick={() => router.push("/chat")}
+            onClick={() => router.push("/login")}
             className="pointer-events-auto group relative px-8 py-3 text-xs font-semibold tracking-[0.25em] uppercase text-white/90 transition-all duration-300"
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
