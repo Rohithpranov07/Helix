@@ -63,14 +63,20 @@ export async function connectDb(): Promise<typeof mongoose> {
       // that points at this cluster (each `next dev`, deploy, script, etc. holds
       // its own pool). Keep each pool tiny.
       maxPoolSize: 5,
-      // CRITICAL: 0, not 1. minPoolSize keeps that many sockets open forever,
-      // even when the app is idle — so every process "does nothing" yet still
-      // consumes connections. With 0, an idle pool drains to just the driver's
-      // monitoring sockets and the count stays near zero between requests.
-      minPoolSize: 0,
-      // Longer than the dashboard's 30s poll so an actively-used app keeps its
-      // connection warm (fast polls, no reconnect churn), but a truly idle
-      // process still drains to zero connections after a minute (minPoolSize 0).
+      // Keep ONE connection permanently warm. Without this, the pool drains
+      // between spaced-out operations (dashboard polls, genome scan steps) and
+      // every one pays a fresh handshake — the reconnect *churn* whose closing
+      // sockets pile up on the cluster as a climbing connection count. One warm
+      // socket reused for everything = flat, low, fast (MongoDB's own guidance
+      // for churn/latency is minPoolSize > 0).
+      //
+      // The original max-connections blowup was NOT this — it was dozens of
+      // orphaned dev-server processes each holding a pool. That's handled
+      // separately by the SIGINT/SIGTERM pool-close above + killing zombies, so
+      // a single well-behaved process keeping one connection is correct here.
+      minPoolSize: 1,
+      // Prune any connections opened above minPoolSize (e.g. a scan burst) once
+      // they've been idle a minute; the one minPoolSize connection stays.
       maxIdleTimeMS: 60_000,
       waitQueueTimeoutMS: 5_000,
       // Tag connections so they're identifiable per-process in Atlas → Metrics →
