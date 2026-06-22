@@ -68,8 +68,10 @@ export async function connectDb(): Promise<typeof mongoose> {
       // consumes connections. With 0, an idle pool drains to just the driver's
       // monitoring sockets and the count stays near zero between requests.
       minPoolSize: 0,
-      // Prune idle sockets quickly so they return to the cluster's free pool.
-      maxIdleTimeMS: 10_000,
+      // Longer than the dashboard's 30s poll so an actively-used app keeps its
+      // connection warm (fast polls, no reconnect churn), but a truly idle
+      // process still drains to zero connections after a minute (minPoolSize 0).
+      maxIdleTimeMS: 60_000,
       waitQueueTimeoutMS: 5_000,
       // Tag connections so they're identifiable per-process in Atlas → Metrics →
       // Connections, which is how you spot a leaking process.

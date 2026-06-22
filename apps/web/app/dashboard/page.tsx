@@ -613,10 +613,14 @@ export default function DashboardPage() {
     abortRef.current?.abort();
     const ac = new AbortController();
     abortRef.current = ac;
-    // If /api/vitals hangs (e.g. MongoDB unreachable), give up quickly and fall
+    // If /api/vitals hangs (e.g. MongoDB truly unreachable), give up and fall
     // back to demo data so the page never gets stuck on the loading skeleton.
+    // The window must clear a cold start: first-ever request pays route
+    // compilation (dev) + the initial Mongo handshake/aggregation, which can run
+    // ~10s. A 5s cutoff fired during that and falsely showed "MongoDB offline"
+    // even when the DB was up; warm polls return in ~2s, well inside this.
     let timedOut = false;
-    const timeout = setTimeout(() => { timedOut = true; ac.abort(); }, 5000);
+    const timeout = setTimeout(() => { timedOut = true; ac.abort(); }, 13000);
     try {
       const res = await fetch("/api/vitals", { signal: ac.signal });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
