@@ -7,6 +7,7 @@ declare global {
   var __helixMongoose: {
     conn: typeof mongoose | null;
     promise: Promise<typeof mongoose> | null;
+    hooked?: boolean;
   };
 }
 
@@ -15,6 +16,24 @@ if (!global.__helixMongoose) {
 }
 
 const cache = global.__helixMongoose;
+
+// Release the pool the moment this process is told to stop (Ctrl+C, dev-server
+// restart, deploy rollover) so its connections free immediately instead of
+// lingering as half-open sockets the cluster has to reap — the main reason a
+// free-tier cluster's connection count "climbs and stays high" after repeated
+// dev restarts. Registered exactly once per process.
+if (!cache.hooked) {
+  cache.hooked = true;
+  const release = async () => {
+    try {
+      await mongoose.connection.close(false);
+    } catch {
+      // best-effort — we're shutting down anyway
+    }
+  };
+  process.once("SIGINT", () => void release().finally(() => process.exit(0)));
+  process.once("SIGTERM", () => void release().finally(() => process.exit(0)));
+}
 
 export async function connectDb(): Promise<typeof mongoose> {
   // Already connected and connection is alive
@@ -40,12 +59,21 @@ export async function connectDb(): Promise<typeof mongoose> {
       dbName,
       serverSelectionTimeoutMS: 10_000,
       socketTimeoutMS: 45_000,
-      // M0 free tier cap is 500 total connections.
-      // Keep pool small — Next.js spawns many concurrent invocations.
+      // M0 free tier cap is ~500 total connections, shared across EVERY process
+      // that points at this cluster (each `next dev`, deploy, script, etc. holds
+      // its own pool). Keep each pool tiny.
       maxPoolSize: 5,
-      minPoolSize: 1,
-      maxIdleTimeMS: 30_000,
+      // CRITICAL: 0, not 1. minPoolSize keeps that many sockets open forever,
+      // even when the app is idle — so every process "does nothing" yet still
+      // consumes connections. With 0, an idle pool drains to just the driver's
+      // monitoring sockets and the count stays near zero between requests.
+      minPoolSize: 0,
+      // Prune idle sockets quickly so they return to the cluster's free pool.
+      maxIdleTimeMS: 10_000,
       waitQueueTimeoutMS: 5_000,
+      // Tag connections so they're identifiable per-process in Atlas → Metrics →
+      // Connections, which is how you spot a leaking process.
+      appName: process.env["HELIX_DB_APP_NAME"] ?? "helix",
       // Don't buffer ops when disconnected — fail fast instead of piling up
       bufferCommands: false,
     })
