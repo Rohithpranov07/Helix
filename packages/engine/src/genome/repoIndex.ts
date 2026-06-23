@@ -59,7 +59,16 @@ const IntentStrandOutputSchema = z.object({
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function shouldSkip(path: string): boolean {
-  return SKIP_PATTERNS.some((p) => path.includes(p));
+  // Match whole path SEGMENTS, never arbitrary substrings. A substring match
+  // treated "out" (a build-dir pattern) as present in every Next.js "route.ts"
+  // ("r-out-e") and in "checkout", silently skipping every API route handler —
+  // exactly where SQLi/authBypass vulns live. Lockfiles are matched by prefix.
+  return path.split("/").some(
+    (seg) =>
+      SKIP_PATTERNS.includes(seg) ||
+      seg.startsWith("pnpm-lock") ||
+      seg.startsWith("package-lock"),
+  );
 }
 
 function isSourceFile(path: string): boolean {
@@ -74,8 +83,12 @@ function isIntentDoc(path: string): boolean {
 
 function moduleOf(path: string): string {
   const parts = path.split("/");
-  // Use top-level directory as module boundary; root files → "root"
-  return parts.length > 1 ? (parts[0] ?? "root") : "root";
+  // Module = the file's PARENT DIRECTORY, so distinct routes/pages/libs become
+  // distinct strands. Using only the top-level directory collapses repos that
+  // nest everything under one folder (e.g. "ShopLite/...") into a single module,
+  // which hides every per-file invariant behind one coarse strand.
+  if (parts.length <= 1) return "root";
+  return parts.slice(0, -1).join("/");
 }
 
 // ── Main export ───────────────────────────────────────────────────────────────

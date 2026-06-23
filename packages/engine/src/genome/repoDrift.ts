@@ -21,13 +21,7 @@ import {
 } from "@helix/db";
 import { gemini, sarvam } from "@helix/ai";
 import { z } from "zod";
-import {
-  getRepo,
-  getRepoTree,
-  readFile,
-  getDefaultBranchSha,
-  createBranch,
-} from "./github.js";
+import { getRepoTree, readFile } from "./github.js";
 
 // ── Sarvam JSON schemas ───────────────────────────────────────────────────────
 
@@ -64,7 +58,15 @@ const SOURCE_EXTS = new Set([
 ]);
 
 function shouldSkip(path: string): boolean {
-  return SKIP_PATTERNS.some((p) => path.includes(p));
+  // Match whole path SEGMENTS, not substrings: "out" (build-dir pattern) is a
+  // substring of every Next.js "route.ts" and "checkout", which would skip every
+  // API route handler — exactly where SQLi/authBypass vulns live.
+  return path.split("/").some(
+    (seg) =>
+      SKIP_PATTERNS.includes(seg) ||
+      seg.startsWith("pnpm-lock") ||
+      seg.startsWith("package-lock"),
+  );
 }
 
 function isSourceFile(path: string): boolean {
@@ -73,8 +75,11 @@ function isSourceFile(path: string): boolean {
 }
 
 function moduleOf(path: string): string {
+  // Must match repoIndex.moduleOf: group by the file's PARENT DIRECTORY so each
+  // strand maps to the same set of files it was indexed from.
   const parts = path.split("/");
-  return parts.length > 1 ? (parts[0] ?? "root") : "root";
+  if (parts.length <= 1) return "root";
+  return parts.slice(0, -1).join("/");
 }
 
 function makeDriftId(): string {
@@ -130,7 +135,12 @@ export async function detectRepoDrift(
 
   for (const strand of strands) {
     try {
-      const modName = strand.moduleId.split("/").pop() ?? strand.moduleId;
+      // The strand's module key is its moduleId minus the "owner/repo/" prefix —
+      // exactly the key moduleOf() produced at index time. Matching on this
+      // (instead of the last path segment) keeps deep, nested modules aligned.
+      const modName = strand.moduleId.startsWith(repoPrefix)
+        ? strand.moduleId.slice(repoPrefix.length)
+        : (strand.moduleId.split("/").pop() ?? strand.moduleId);
       const files = moduleFiles.get(modName) ?? [];
 
       // Read current source
@@ -214,40 +224,66 @@ export async function detectRepoDrift(
       }
 
       for (const [affectedFile, fileMismatches] of mismatchesByFile) {
-        const file = fileContents.get(affectedFile);
-        if (!file) continue;
+        // Sarvam may report a path that wasn't in the pre-read set, or with a
+        // slightly different prefix. Resolve it instead of dropping the mismatch:
+        //   1. exact key, 2. basename match within this module's files,
+        //   3. fetch on demand from GitHub.
+        // Dropping here was the bug that produced "drift detected but 0 mismatches"
+        // reports, which then auto-approved with no fix.
+        let resolvedPath = affectedFile;
+        let file = fileContents.get(affectedFile);
+        if (!file) {
+          const base = affectedFile.split("/").pop() ?? affectedFile;
+          for (const [key, val] of fileContents) {
+            if (key === base || key.endsWith(`/${base}`)) { file = val; resolvedPath = key; break; }
+          }
+        }
+        if (!file) {
+          // Last resort — try the path verbatim, then prefixed with the module key.
+          for (const cand of [affectedFile, `${modName}/${affectedFile.split("/").pop()}`]) {
+            const fetched = await readFile(token, owner, repo, cand);
+            if (fetched) { file = fetched; resolvedPath = cand; break; }
+          }
+        }
+        if (!file) {
+          // eslint-disable-next-line no-console
+          console.warn(`[genome/drift] could not resolve affected file "${affectedFile}" in module ${modName} — keeping mismatch without a generated patch`);
+        }
 
-        const patchResult = await sarvam.chat({
-          messages: [
-            {
-              role: "system",
-              content:
-                "You are HELIX Genome. Generate a minimal patch to fix ALL listed code-intent drifts for a single file.\n" +
-                "Output ONLY valid JSON with EXACTLY: {\"diff\":\"unified diff string\",\"newContent\":\"complete corrected file content\",\"rationale\":\"one sentence\"}\n" +
-                "The fix must restore ALL listed invariants without changing any other behavior. Return the entire corrected file content.",
-            },
-            {
-              role: "user",
-              content:
-                `Invariants violated in this file:\n` +
-                fileMismatches.map((m) => `[${m.invariantId}] — ${m.description}`).join("\n") + `\n\n` +
-                `File: ${affectedFile}\n\n` +
-                `Current content:\n${file.content}\n\n` +
-                `Module purpose: ${strand.purpose}`,
-            },
-          ],
-          schema: PatchSchema,
-          temperature: 0.1,
-        });
-        const patch = JSON.parse(patchResult.content) as z.infer<typeof PatchSchema>;
+        let patch: z.infer<typeof PatchSchema> | null = null;
+        if (file) {
+          const patchResult = await sarvam.chat({
+            messages: [
+              {
+                role: "system",
+                content:
+                  "You are HELIX Genome. Generate a minimal patch to fix ALL listed code-intent drifts for a single file.\n" +
+                  "Output ONLY valid JSON with EXACTLY: {\"diff\":\"unified diff string\",\"newContent\":\"complete corrected file content\",\"rationale\":\"one sentence\"}\n" +
+                  "The fix must restore ALL listed invariants without changing any other behavior. Return the entire corrected file content.",
+              },
+              {
+                role: "user",
+                content:
+                  `Invariants violated in this file:\n` +
+                  fileMismatches.map((m) => `[${m.invariantId}] — ${m.description}`).join("\n") + `\n\n` +
+                  `File: ${resolvedPath}\n\n` +
+                  `Current content:\n${file.content}\n\n` +
+                  `Module purpose: ${strand.purpose}`,
+              },
+            ],
+            schema: PatchSchema,
+            temperature: 0.1,
+          });
+          patch = JSON.parse(patchResult.content) as z.infer<typeof PatchSchema>;
+        }
 
         for (const mismatch of fileMismatches) {
           allMismatches.push({
             invariantId: mismatch.invariantId,
             description: mismatch.description,
-            affectedFile: mismatch.affectedFile,
-            diff: patch.diff,
-            newContent: patch.newContent, // same combined fix for all mismatches on this file
+            affectedFile: resolvedPath,
+            diff: patch?.diff ?? `# Drift detected in ${resolvedPath} — patch could not be auto-generated; manual review required.`,
+            newContent: patch?.newContent ?? (file?.content ?? ""), // same combined fix for all mismatches on this file
           });
         }
       }
@@ -260,21 +296,20 @@ export async function detectRepoDrift(
     }
   }
 
-  // 6. Create shadow branch on GitHub (helix-shadow-<timestamp>)
+  // 6. Reserve the shadow branch NAME only — do NOT create it or write anything
+  //    to GitHub here. The branch and the Pull Request are created together when
+  //    a human approves the report (approveDriftPatch). Detecting drift must never
+  //    push to the target: that is the Shadow invariant — no write reaches the
+  //    real target without an approval/proof. (Previously this step eagerly
+  //    created an empty shadow branch, leaving an orphan branch and no PR.)
   const shadowBranch = `helix-shadow-${Date.now()}`;
-  let defaultBranch = "main";
-  try {
-    const repoInfo = await getRepo(token, owner, repo);
-    defaultBranch = repoInfo.default_branch;
-    const sha = await getDefaultBranchSha(token, owner, repo, defaultBranch);
-    await createBranch(token, owner, repo, shadowBranch, sha);
-  } catch (e) {
-    // Branch creation failure is non-fatal — report is still persisted; PR step will retry.
-    // eslint-disable-next-line no-console
-    console.warn("Shadow branch creation failed:", e instanceof Error ? e.message : e);
-  }
 
-  // 7. Persist DriftReport
+  // 7. Persist DriftReport.
+  //    A report is "approved" (clean) ONLY when nothing drifted — no mismatches
+  //    AND the worst pairing score is essentially perfect. Any detected drift is
+  //    "pending_approval" so a human must approve before a PR is opened. This
+  //    closes the bug where dropped mismatches made a drifted module auto-approve.
+  const clean = allMismatches.length === 0 && worstScore >= 0.99;
   const driftId = makeDriftId();
   const report: DriftReport = {
     driftId,
@@ -284,7 +319,7 @@ export async function detectRepoDrift(
     shadowBranch,
     detectedAt: new Date().toISOString(),
     mismatches: allMismatches,
-    status: allMismatches.length === 0 ? "approved" : "pending_approval",
+    status: clean ? "approved" : "pending_approval",
   };
 
   await createDriftReport(report);
