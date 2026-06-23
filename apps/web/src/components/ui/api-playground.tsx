@@ -161,7 +161,7 @@ export function APIPlayground({
   // --- Animation State for Scanning Logs ---
   const [logs, setLogs] = useState<string[]>([]);
   const [elapsed, setElapsed] = useState(0);
-  const logsEndRef = useRef<HTMLDivElement>(null);
+  const logsContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!scanning) {
@@ -227,7 +227,14 @@ export function APIPlayground({
   }, [scanning]);
 
   useEffect(() => {
-    logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    // Keep the log view pinned to the latest line, but scroll ONLY this
+    // container — never call scrollIntoView, which bubbles up and scrolls the
+    // whole page, fighting the user's manual scroll (the up/down glitch). Also
+    // skip if the user has scrolled up to read, so we don't yank them back down.
+    const el = logsContainerRef.current;
+    if (!el) return;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
+    if (nearBottom) el.scrollTop = el.scrollHeight;
   }, [logs]);
 
   const getCleanConfig = (): CleanScanConfig => {
@@ -401,7 +408,7 @@ export function APIPlayground({
                       </span>
                     )}
                   </h3>
-                  <div className="overflow-auto flex-1 bg-[#18181b] rounded-lg p-4 font-mono text-xs relative">
+                  <div ref={logsContainerRef} className="overflow-auto flex-1 bg-[#18181b] rounded-lg p-4 font-mono text-xs relative">
                     {scanning ? (
                       <div className="flex flex-col gap-2">
                         {logs.map((log, i) => (
@@ -411,7 +418,6 @@ export function APIPlayground({
                           <span>&gt;</span>
                           <span className="w-2 h-4 bg-emerald-400 animate-pulse" />
                         </div>
-                        <div ref={logsEndRef} />
                       </div>
                     ) : (
                       <pre className="text-[#e4e4e7]">
