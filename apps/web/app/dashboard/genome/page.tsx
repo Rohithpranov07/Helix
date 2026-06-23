@@ -88,10 +88,19 @@ export default function GenomePage() {
   const loadConnections = useCallback(async () => {
     try {
       const res = await fetch("/api/github/connections");
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) {
+        const j = (await res.json().catch(() => null)) as { message?: string } | null;
+        throw new Error(j?.message ?? `HTTP ${res.status}`);
+      }
       const json = await res.json() as { connections?: GitHubConnection[] };
       if (json.connections) setConnections(json.connections);
-    } catch (e) { setConnError(e instanceof Error ? e.message : "Failed to load connections"); }
+    } catch (e) {
+      // This call only ever fails on a DB/network problem — never OAuth. Surface it
+      // as such instead of mislabeling it an OAuth error.
+      const raw = e instanceof Error ? e.message : "Failed to load connections";
+      const isDb = /mongo|querysrv|econnrefused|whitelist|etimedout|connection failed|topology|server selection/i.test(raw);
+      setConnError(isDb ? `Database unavailable — ${raw.replace(/^MongoDB connection failed:\s*/i, "")}` : raw);
+    }
   }, []);
 
   const loadDrifts = useCallback(async (o: string, r: string) => {
@@ -302,7 +311,7 @@ export default function GenomePage() {
       {/* Error banners */}
       {connError && (
         <div className="neo-card" style={{ background: NEO.pink, padding: "10px 14px", color: NEO.ink, fontSize: 13, fontWeight: 700, marginBottom: 16 }}>
-          OAuth error: {connError}
+          {connError.startsWith("Database unavailable") ? connError : `OAuth error: ${connError}`}
         </div>
       )}
       {error && (
