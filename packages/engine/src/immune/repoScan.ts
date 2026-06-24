@@ -298,16 +298,12 @@ export async function immuneScanRepo(opts: RepoScanOptions): Promise<ImmuneScanR
     }
   }
 
-  // 6. Create shadow branch on GitHub
+  // 6. Reserve the shadow branch NAME only — do NOT create it or push anything to
+  //    GitHub here. The branch and the Pull Request are created together only when
+  //    a human approves the scan (approveImmuneScan). Scanning must never write to
+  //    the target: that is the Shadow invariant. (Previously this step eagerly
+  //    created an empty branch, leaving an orphan branch and no PR.)
   const shadowBranch = `helix-immune-${Date.now()}`;
-  try {
-    const repoInfo = await getRepo(token, githubOwner, githubRepo);
-    const sha = await getDefaultBranchSha(token, githubOwner, githubRepo, repoInfo.default_branch);
-    await createBranch(token, githubOwner, githubRepo, shadowBranch, sha);
-  } catch (e) {
-    // eslint-disable-next-line no-console
-    console.warn("[repoScan] shadow branch creation failed:", e instanceof Error ? e.message : e);
-  }
 
   // 7. Persist ImmuneScanRun
   const scanId = makeScanId();
