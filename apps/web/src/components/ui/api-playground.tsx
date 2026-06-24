@@ -192,7 +192,7 @@ export function APIPlayground({
       "> Mapping taint sources to vulnerable endpoints...",
       "> Cross-referencing auth middleware chains...",
       "> Evaluating RLS policy coverage...",
-      "> Running Sarvam patch synthesis...",
+      "> Running Qwen3.6-27B patch synthesis...",
       "> Generating minimal diffs for each finding...",
       "> Verifying patches preserve original behaviour...",
       "> Writing patches to shadow branch...",

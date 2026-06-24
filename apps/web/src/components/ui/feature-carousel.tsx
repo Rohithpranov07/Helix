@@ -93,7 +93,7 @@ const steps: readonly Step[] = [
     name: "Diagnose",
     title: "Reconstruct the cause",
     description:
-      "Sarvam rebuilds the causal chain and judges severity, turning raw signals into a precise root cause the organism can act on.",
+      "Qwen3.6-27B rebuilds the causal chain and judges severity, turning raw signals into a precise root cause the organism can act on.",
   },
   {
     id: "3",

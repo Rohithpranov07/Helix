@@ -4,7 +4,7 @@
  * spinShadow:     ensures shadow/workspace/ is populated from the real target source,
  *                 then starts the helix-shadow Docker container. Idempotent.
  *
- * applyToShadow:  receives a Sarvam-synthesised Patch, writes each unified diff into
+ * applyToShadow:  receives a Groq-synthesised Patch, writes each unified diff into
  *                 shadow/workspace/ using the system `patch` command, so the running
  *                 shadow container sees the change immediately via the volume mount.
  *                 THE REAL apps/target/ IS NEVER TOUCHED — Shadow invariant.
@@ -115,7 +115,7 @@ export async function spinShadow(
 // ── applyToShadow ─────────────────────────────────────────────────────────────
 
 /**
- * Applies a Sarvam-synthesised patch to the shadow workspace ONLY.
+ * Applies a Groq-synthesised patch to the shadow workspace ONLY.
  *
  * For each file in the patch:
  *   1. Ensures the file exists in shadow/workspace/ (copies from real target if missing).

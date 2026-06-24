@@ -8,14 +8,14 @@
  *   4. Gemini: compute entropy dims (wide-context per CLAUDE.md).
  *   5. Compute temperature scalar + projectedRewriteWeeks.
  *   6. Persist entropy timeseries point.
- *   7. Sarvam: identify highest-entropy zone → propose ONE enzyme action.
- *   8. Sarvam: synthesize patch for that zone.
+ *   7. Groq: identify highest-entropy zone → propose ONE enzyme action.
+ *   8. Groq: synthesize patch for that zone.
  *   9. Create shadow branch (helix-entropy-<ts>).
  *  10. Persist MetabolismRun with status='pending_approval'.
  *
  * Stack mapping (CLAUDE.md):
  *   Gemini = wide-context entropy field computation.
- *   Sarvam = enzyme proposal + patch synthesis.
+ *   Groq = enzyme proposal + patch synthesis.
  *   MongoDB = metabolism_run collection + entropy_timeseries.
  */
 
@@ -30,7 +30,7 @@ import {
   listEntropyPoints,
   createShadowProof,
 } from "@helix/db";
-import { gemini, sarvam } from "@helix/ai";
+import { gemini, groq } from "@helix/ai";
 import { z } from "zod";
 import {
   getRepo,
@@ -43,7 +43,7 @@ import {
 } from "../genome/github.js";
 import { computeTemperature, computeProjectedWeeks } from "./temperature.js";
 
-// ── Sarvam JSON schemas ───────────────────────────────────────────────────────
+// ── Groq JSON schemas ───────────────────────────────────────────────────────
 
 const EnzymeProposalSchema = z
   .object({
@@ -246,10 +246,10 @@ export async function metabolismScanRepo(opts: RepoMetabolismOptions): Promise<M
     console.warn("[repoMetabolism] entropy point persist failed:", e instanceof Error ? e.message : e);
   }
 
-  // 7. Sarvam: identify highest-entropy zone + propose ONE enzyme action
+  // 7. Groq: identify highest-entropy zone + propose ONE enzyme action
   let enzymeProposal: z.infer<typeof EnzymeProposalSchema> | null = null;
   try {
-    const propResult = await sarvam.chat({
+    const propResult = await groq.chat({
       messages: [
         {
           role: "system",
@@ -282,7 +282,7 @@ export async function metabolismScanRepo(opts: RepoMetabolismOptions): Promise<M
     console.warn("[repoMetabolism] enzyme proposal failed:", e instanceof Error ? e.message : e);
   }
 
-  // 8. Sarvam: synthesize patch for the proposed enzyme zone
+  // 8. Groq: synthesize patch for the proposed enzyme zone
   let enzymeEntry: MetabolismEnzyme | null = null;
   if (enzymeProposal) {
     const resolvedType: MetabolismEnzyme["enzymeType"] =
@@ -294,7 +294,7 @@ export async function metabolismScanRepo(opts: RepoMetabolismOptions): Promise<M
     try {
       const fileData = fileContentMap.get(enzymeProposal.targetZone);
       if (fileData) {
-        const patchResult = await sarvam.chat({
+        const patchResult = await groq.chat({
           messages: [
             {
               role: "system",

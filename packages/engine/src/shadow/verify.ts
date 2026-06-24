@@ -5,8 +5,8 @@
  *   1. Reads shadow/staging/<changeRef>/meta.json for vulnClass + endpoint.
  *   2. Builds class-specific HTTP traffic cases (attack + benign).
  *   3. Replays them against BOTH real target (:3001) and shadow (:3002).
- *   4. Sarvam (PRIMARY LLM) judges whether the attack is neutralised and
- *      counts regressions. Falls back to deterministic checks if Sarvam
+ *   4. Groq (PRIMARY LLM) judges whether the attack is neutralised and
+ *      counts regressions. Falls back to deterministic checks if Groq
  *      is unavailable.
  *   5. Persists a shadow_proof to MongoDB.
  *   6. Returns the proof (used by assertPromotable to gate real-target promotion).
@@ -14,13 +14,13 @@
  * assertPromotable (re-exported from heal.ts for convenience): throws
  *   VerificationError unless proof.verdict === 'promote'.
  *
- * CLAUDE.md rule: Sarvam = behaviour-equivalence judgement. Gemini is never used here.
+ * CLAUDE.md rule: Groq = behaviour-equivalence judgement. Gemini is never used here.
  */
 import { z } from "zod";
 import { readFileSync, existsSync } from "fs";
 import { resolve } from "path";
 import { ValidationError, type ShadowProof, type ShadowVerdict, type VulnClass } from "@helix/shared";
-import { sarvam } from "@helix/ai";
+import { groq } from "@helix/ai";
 import { connectDb, createShadowProof } from "@helix/db";
 import { replayTraffic, type TrafficCase, type TrafficReplay } from "./runtime.js";
 
@@ -100,7 +100,7 @@ function buildTrafficCases(vulnClass: VulnClass, endpoint: string): TrafficCase[
   }
 }
 
-// ── Sarvam equivalence judgement ──────────────────────────────────────────────
+// ── Groq equivalence judgement ──────────────────────────────────────────────
 
 const JudgeOutputSchema = z.object({
   intendedFixPassed: z.boolean(),
@@ -140,11 +140,11 @@ function buildJudgePrompt(
   return lines.join("\n");
 }
 
-async function sarvamJudge(
+async function groqJudge(
   meta: StagingMeta,
   replays: TrafficReplay[],
 ): Promise<JudgeOutput> {
-  const result = await sarvam.chat({
+  const result = await groq.chat({
     messages: [
       { role: "system", content: JUDGE_SYSTEM },
       { role: "user", content: buildJudgePrompt(meta, replays) },
@@ -249,10 +249,10 @@ export async function verifyEquivalence(
   const cases = buildTrafficCases(meta.vulnClass, meta.endpoint);
   const replays = await replayTraffic(cases, opts);
 
-  // 3. Ask Sarvam to judge equivalence; fall back to deterministic checks.
+  // 3. Ask Groq to judge equivalence; fall back to deterministic checks.
   let judgement: JudgeOutput;
   try {
-    judgement = await sarvamJudge(meta, replays);
+    judgement = await groqJudge(meta, replays);
   } catch {
     judgement = deterministicJudge(meta.vulnClass, replays);
   }

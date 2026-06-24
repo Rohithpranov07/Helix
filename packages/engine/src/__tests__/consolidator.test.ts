@@ -25,7 +25,7 @@ vi.mock("@helix/db", () => ({
 }));
 
 vi.mock("@helix/ai", () => ({
-  sarvam: { chat: vi.fn() },
+  groq: { chat: vi.fn() },
   gemini: { analyze: vi.fn() },
 }));
 
@@ -314,7 +314,7 @@ describe("consolidate — Shadow gate (rejection / escalation)", () => {
     await consolidate(".", {
       collectSources: () => MOCK_SOURCES,
       findDuplications: async () => [DUP_PRODUCT],
-      synthesizePatch: async () => { throw new Error("Sarvam timeout"); },
+      synthesizePatch: async () => { throw new Error("Groq timeout"); },
       applyShadow: mockApply,
       measureAfter: async () => makeAfterPoint() as never,
     });
@@ -474,9 +474,9 @@ describe("consolidate — error cases", () => {
   it("propagates findDuplications errors to the caller", async () => {
     const err = await consolidate(".", {
       collectSources: () => MOCK_SOURCES,
-      findDuplications: async () => { throw new Error("Sarvam rate limit"); },
+      findDuplications: async () => { throw new Error("Groq rate limit"); },
       measureAfter: async () => makeAfterPoint() as never,
     }).catch((e: unknown) => e);
-    expect((err as Error).message).toContain("Sarvam rate limit");
+    expect((err as Error).message).toContain("Groq rate limit");
   });
 });

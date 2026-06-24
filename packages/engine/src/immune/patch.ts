@@ -1,7 +1,7 @@
 /**
  * T2.3 — Patch synthesis + Shadow apply
  *
- * synthesizePatch: Sarvam (PRIMARY LLM) generates a class-appropriate minimal
+ * synthesizePatch: Groq (PRIMARY LLM) generates a class-appropriate minimal
  *   fix as a strict-JSON, Zod-validated unified diff.
  * applyInShadow:   applies the patch to the Shadow twin ONLY (T4.1 runtime).
  *   It NEVER writes to the real target. Until T4.1 is wired, the default
@@ -11,7 +11,7 @@ import { z } from "zod";
 import { writeFileSync, mkdirSync } from "fs";
 import { resolve } from "path";
 import { ValidationError, type Vulnerability, type VulnClass } from "@helix/shared";
-import { sarvam } from "@helix/ai";
+import { groq } from "@helix/ai";
 import { connectDb, updateVulnerability } from "@helix/db";
 import type { HelixDoc } from "@helix/db";
 
@@ -147,11 +147,11 @@ function buildUserPrompt(finding: Vulnerability): string {
 
 /**
  * Generates a class-appropriate minimal patch for a confirmed finding using
- * Sarvam in strict-JSON mode. The result is Zod-validated and passed through
+ * Groq in strict-JSON mode. The result is Zod-validated and passed through
  * the safety guardrail before being returned.
  */
 export async function synthesizePatch(finding: Vulnerability): Promise<Patch> {
-  const result = await sarvam.chat({
+  const result = await groq.chat({
     messages: [
       { role: "system", content: SYNTH_SYSTEM_PROMPT },
       { role: "user", content: buildUserPrompt(finding) },

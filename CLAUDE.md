@@ -11,13 +11,15 @@ failures, and entropy are ONE phenomenon — divergence over time.
 ## GROUND TRUTH (never change without explicit human instruction)
 - Architecture, organ responsibilities, data models, and the sponsor-stack
   mapping are FIXED by the Technical Deep-Dive. Do not redesign them.
-- Sponsor stack ownership is fixed:
-  - Sarvam  = PRIMARY LLM — all reasoning, patch synthesis, drift judgement,
-              causal reconstruction, behaviour-equivalence judgement, test/assertion
-              generation, Bulbul TTS, Saaras STT. Used across nearly every organ.
-              Default and dominant AI provider.
+- Stack ownership is fixed:
+  - Qwen3.6 = PRIMARY LLM — Qwen3.6-27B served via Groq's OpenAI-compatible API,
+              accessed only through `packages/ai/src/groq.ts` (exported as `groq`).
+              Handles all reasoning, patch synthesis, drift judgement, causal
+              reconstruction, behaviour-equivalence judgement, and test/assertion
+              generation. Default and dominant AI provider across nearly every organ.
+              (Replaced Sarvam on 2026-06-24; voice TTS/STT was removed with it.)
   - Gemini  = LOW SURFACE AREA ONLY — used only for whole-repo wide-context reads
-              where Sarvam cannot substitute: entropy field computation, intent-code
+              where Qwen3.6 cannot substitute: entropy field computation, intent-code
               base-pairing across many files simultaneously, log/UI parsing for
               Resurrection Reflex. Never route reasoning, patches, or judgement to Gemini.
   - MongoDB = Biology/memory (intent genome, vector antibody library,
@@ -29,7 +31,7 @@ failures, and entropy are ONE phenomenon — divergence over time.
 
 ## ANTI-HALLUCINATION RULES (hard rules)
 1. Never invent API endpoints, request/response shapes, SDK method names, or
-   package APIs. Before using ANY external API (Sarvam, Gemini, MongoDB driver,
+   package APIs. Before using ANY external API (Groq/Qwen, Gemini, MongoDB driver,
    Supabase, n8n), open and read its official docs IN THIS SESSION and confirm
    the exact shapes. If you cannot verify, STOP and ask — do not guess.
 2. Never assume a package or version exists. Check package.json / the registry
@@ -83,7 +85,7 @@ helix/
 ├── apps/target/              # vulnerable demo app "ShopLite" (port 3001)
 ├── packages/shared/          # types + contracts (B.2, B.3) — import only
 ├── packages/db/              # Mongoose models, Zod, repos, vector index
-├── packages/ai/              # Sarvam + Gemini clients (chat, embed, TTS, STT)
+├── packages/ai/              # Groq (Qwen3.6) + Gemini clients (chat, embed)
 ├── packages/engine/          # organs: scanner, healer, reflex, genome, metabolism, shadow, governor
 ├── shadow/                   # Shadow twin runtime (Docker, port 3002)
 ├── orchestration/n8n/        # docker-compose + exported workflows

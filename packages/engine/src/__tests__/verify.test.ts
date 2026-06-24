@@ -7,7 +7,7 @@ import type { TrafficReplay } from "../shadow/runtime.js";
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
 // vi.mock is hoisted — use vi.hoisted() for variables referenced in factory bodies.
-const { mockSarvamChat } = vi.hoisted(() => ({ mockSarvamChat: vi.fn() }));
+const { mockGroqChat } = vi.hoisted(() => ({ mockGroqChat: vi.fn() }));
 
 vi.mock("fs", async () => {
   const actual = await vi.importActual<typeof import("fs")>("fs");
@@ -33,7 +33,7 @@ vi.mock("@helix/db", () => ({
 }));
 
 vi.mock("@helix/ai", () => ({
-  sarvam: { chat: mockSarvamChat },
+  groq: { chat: mockGroqChat },
 }));
 
 // Mock replayTraffic from runtime — we don't want real HTTP calls
@@ -64,14 +64,14 @@ function makeReplay(
   };
 }
 
-function sarvamRespond(intendedFixPassed: boolean, regressions: number): void {
-  mockSarvamChat.mockResolvedValueOnce({
+function groqRespond(intendedFixPassed: boolean, regressions: number): void {
+  mockGroqChat.mockResolvedValueOnce({
     content: JSON.stringify({
       intendedFixPassed,
       regressions,
-      rationale: "Sarvam says so.",
+      rationale: "Groq says so.",
     }),
-    model: "sarvam-105b",
+    model: "qwen3.6-27b",
   });
 }
 
@@ -80,7 +80,7 @@ beforeEach(() => {
   vi.mocked(readFileSync).mockReturnValue(
     JSON.stringify({ findingId: "vuln-001", vulnClass: "SQLi", endpoint: "/api/products/search" }),
   );
-  mockSarvamChat.mockClear();
+  mockGroqChat.mockClear();
   vi.mocked(createShadowProof).mockClear();
   vi.mocked(replayTraffic).mockClear();
   vi.mocked(replayTraffic).mockResolvedValue([
@@ -91,9 +91,9 @@ beforeEach(() => {
 
 // ── verifyEquivalence — happy path ────────────────────────────────────────────
 
-describe("verifyEquivalence — happy path (Sarvam promotes)", () => {
-  it("returns a ShadowProof with verdict=promote when Sarvam says fix passed", async () => {
-    sarvamRespond(true, 0);
+describe("verifyEquivalence — happy path (Groq promotes)", () => {
+  it("returns a ShadowProof with verdict=promote when Groq says fix passed", async () => {
+    groqRespond(true, 0);
 
     const proof = await verifyEquivalence("shadow-123-abc");
 
@@ -107,7 +107,7 @@ describe("verifyEquivalence — happy path (Sarvam promotes)", () => {
   });
 
   it("persists the proof to MongoDB via createShadowProof", async () => {
-    sarvamRespond(true, 0);
+    groqRespond(true, 0);
 
     await verifyEquivalence("shadow-123-abc");
 
@@ -117,8 +117,8 @@ describe("verifyEquivalence — happy path (Sarvam promotes)", () => {
     expect(call.changeRef).toBe("shadow-123-abc");
   });
 
-  it("returns verdict=reject when Sarvam says fix failed", async () => {
-    sarvamRespond(false, 0);
+  it("returns verdict=reject when Groq says fix failed", async () => {
+    groqRespond(false, 0);
 
     const proof = await verifyEquivalence("shadow-123-abc");
 
@@ -127,7 +127,7 @@ describe("verifyEquivalence — happy path (Sarvam promotes)", () => {
   });
 
   it("returns verdict=reject when regressions > 0 even if intendedFixPassed", async () => {
-    sarvamRespond(true, 2);
+    groqRespond(true, 2);
 
     const proof = await verifyEquivalence("shadow-123-abc");
 
@@ -140,7 +140,7 @@ describe("verifyEquivalence — happy path (Sarvam promotes)", () => {
 
 describe("verifyEquivalence — traffic replay", () => {
   it("calls replayTraffic with the correct cases for SQLi", async () => {
-    sarvamRespond(true, 0);
+    groqRespond(true, 0);
 
     await verifyEquivalence("shadow-123-abc");
 
@@ -156,7 +156,7 @@ describe("verifyEquivalence — traffic replay", () => {
     vi.mocked(readFileSync).mockReturnValue(
       JSON.stringify({ findingId: "vuln-002", vulnClass: "XSS", endpoint: "/search" }),
     );
-    sarvamRespond(true, 0);
+    groqRespond(true, 0);
 
     await verifyEquivalence("shadow-456-xss");
 
@@ -168,7 +168,7 @@ describe("verifyEquivalence — traffic replay", () => {
     vi.mocked(readFileSync).mockReturnValue(
       JSON.stringify({ findingId: "vuln-003", vulnClass: "authBypass", endpoint: "/admin/orders" }),
     );
-    sarvamRespond(true, 0);
+    groqRespond(true, 0);
 
     await verifyEquivalence("shadow-789-auth");
 
@@ -177,11 +177,11 @@ describe("verifyEquivalence — traffic replay", () => {
   });
 });
 
-// ── verifyEquivalence — Sarvam fallback (deterministic) ───────────────────────
+// ── verifyEquivalence — Groq fallback (deterministic) ───────────────────────
 
 describe("verifyEquivalence — deterministic fallback", () => {
-  it("falls back to deterministic check when Sarvam throws", async () => {
-    mockSarvamChat.mockRejectedValueOnce(new Error("Sarvam unavailable"));
+  it("falls back to deterministic check when Groq throws", async () => {
+    mockGroqChat.mockRejectedValueOnce(new Error("Groq unavailable"));
     // SQLi: shadow returns 400 for tautology → fix passed deterministically
     vi.mocked(replayTraffic).mockResolvedValueOnce([
       makeReplay("/api/products/search?q=tautology", 200, 400, "Bad request"),
@@ -198,7 +198,7 @@ describe("verifyEquivalence — deterministic fallback", () => {
     vi.mocked(readFileSync).mockReturnValue(
       JSON.stringify({ findingId: "v", vulnClass: "XSS", endpoint: "/search" }),
     );
-    mockSarvamChat.mockRejectedValueOnce(new Error("unavailable"));
+    mockGroqChat.mockRejectedValueOnce(new Error("unavailable"));
     vi.mocked(replayTraffic).mockResolvedValueOnce([
       makeReplay("/search?q=xss", 200, 200, "<p>escaped</p>"),
       makeReplay("/search?q=normal", 200, 200, "<p>products</p>"),
@@ -213,7 +213,7 @@ describe("verifyEquivalence — deterministic fallback", () => {
     vi.mocked(readFileSync).mockReturnValue(
       JSON.stringify({ findingId: "v", vulnClass: "XSS", endpoint: "/search" }),
     );
-    mockSarvamChat.mockRejectedValueOnce(new Error("unavailable"));
+    mockGroqChat.mockRejectedValueOnce(new Error("unavailable"));
     vi.mocked(replayTraffic).mockResolvedValueOnce([
       makeReplay("/search?q=xss", 200, 200, "<script>alert(1)</script>"),
     ]);
@@ -228,7 +228,7 @@ describe("verifyEquivalence — deterministic fallback", () => {
     vi.mocked(readFileSync).mockReturnValue(
       JSON.stringify({ findingId: "v", vulnClass: "authBypass", endpoint: "/admin/orders" }),
     );
-    mockSarvamChat.mockRejectedValueOnce(new Error("unavailable"));
+    mockGroqChat.mockRejectedValueOnce(new Error("unavailable"));
     vi.mocked(replayTraffic).mockResolvedValueOnce([
       makeReplay("/admin/orders", 200, 403, "Forbidden"),
     ]);
@@ -240,7 +240,7 @@ describe("verifyEquivalence — deterministic fallback", () => {
   });
 
   it("deterministic: regression counted when real=200 but shadow=500", async () => {
-    mockSarvamChat.mockRejectedValueOnce(new Error("unavailable"));
+    mockGroqChat.mockRejectedValueOnce(new Error("unavailable"));
     vi.mocked(replayTraffic).mockResolvedValueOnce([
       makeReplay("/api/products/search?q=tautology", 200, 400, "Bad request"), // attack fixed
       makeReplay("/api/products/search?q=normal", 200, 500, "Internal error"), // regression!

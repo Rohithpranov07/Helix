@@ -4,13 +4,13 @@ import type { HelixDoc } from "@helix/db";
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
-const { mockSarvamChat, mockGeminiAnalyze } = vi.hoisted(() => ({
-  mockSarvamChat: vi.fn(),
+const { mockGroqChat, mockGeminiAnalyze } = vi.hoisted(() => ({
+  mockGroqChat: vi.fn(),
   mockGeminiAnalyze: vi.fn(),
 }));
 
 vi.mock("@helix/ai", () => ({
-  sarvam: { chat: mockSarvamChat },
+  groq: { chat: mockGroqChat },
   gemini: { analyze: mockGeminiAnalyze },
 }));
 
@@ -39,12 +39,12 @@ function goodCausalResponse(steps = 3) {
   });
 }
 
-function sarvamOk(steps = 3): void {
-  mockSarvamChat.mockResolvedValueOnce({ content: goodCausalResponse(steps), model: "sarvam-105b" });
+function groqOk(steps = 3): void {
+  mockGroqChat.mockResolvedValueOnce({ content: goodCausalResponse(steps), model: "qwen3.6-27b" });
 }
 
 beforeEach(() => {
-  mockSarvamChat.mockClear();
+  mockGroqChat.mockClear();
   mockGeminiAnalyze.mockClear();
   vi.mocked(createIncident).mockClear();
   // Default: Gemini unavailable (short-circuit; tests explicitly enable it)
@@ -55,7 +55,7 @@ beforeEach(() => {
 
 describe("handleIncident — happy path", () => {
   it("persists an Incident to MongoDB and returns it", async () => {
-    sarvamOk();
+    groqOk();
 
     const doc = await handleIncident({
       deployId: "deploy-abc",
@@ -71,7 +71,7 @@ describe("handleIncident — happy path", () => {
   });
 
   it("sets baselineDelta from latencyMs - baselineLatencyMs", async () => {
-    sarvamOk();
+    groqOk();
 
     const doc = await handleIncident({
       deployId: "deploy-abc",
@@ -82,7 +82,7 @@ describe("handleIncident — happy path", () => {
   });
 
   it("infers baselineDelta from HTTP 5xx status when no latency given", async () => {
-    sarvamOk();
+    groqOk();
 
     const doc = await handleIncident({
       deployId: "deploy-abc",
@@ -93,7 +93,7 @@ describe("handleIncident — happy path", () => {
   });
 
   it("uses latency vs default baseline (150ms) when baselineLatencyMs absent", async () => {
-    sarvamOk();
+    groqOk();
 
     const doc = await handleIncident({
       deployId: "deploy-abc",
@@ -103,8 +103,8 @@ describe("handleIncident — happy path", () => {
     expect(doc.baselineDelta).toBe(450);
   });
 
-  it("sets rollbackAt when Sarvam recommends rollback", async () => {
-    sarvamOk();
+  it("sets rollbackAt when Groq recommends rollback", async () => {
+    groqOk();
 
     const doc = await handleIncident({
       deployId: "deploy-abc",
@@ -114,14 +114,14 @@ describe("handleIncident — happy path", () => {
     expect(doc.rollbackAt).toBeTruthy();
   });
 
-  it("does NOT set rollbackAt when Sarvam says no rollback", async () => {
-    mockSarvamChat.mockResolvedValueOnce({
+  it("does NOT set rollbackAt when Groq says no rollback", async () => {
+    mockGroqChat.mockResolvedValueOnce({
       content: JSON.stringify({
         causalChain: [{ order: 1, description: "Minor regression", evidenceRef: "status:200" }],
         rollbackRecommended: false,
         userImpactSeconds: 10,
       }),
-      model: "sarvam-105b",
+      model: "qwen3.6-27b",
     });
 
     const doc = await handleIncident({
@@ -133,7 +133,7 @@ describe("handleIncident — happy path", () => {
   });
 
   it("stores the raw signal as failingRequest", async () => {
-    sarvamOk();
+    groqOk();
     const signal = { url: "/api/products", status: 500, customField: "x" };
 
     const doc = await handleIncident({ deployId: "deploy-abc", signal });
@@ -142,18 +142,18 @@ describe("handleIncident — happy path", () => {
   });
 });
 
-// ── handleIncident — Sarvam causal chain ──────────────────────────────────────
+// ── handleIncident — Groq causal chain ──────────────────────────────────────
 
-describe("handleIncident — Sarvam causal chain", () => {
-  it("passes deployId and signal fields into the Sarvam prompt", async () => {
-    sarvamOk();
+describe("handleIncident — Groq causal chain", () => {
+  it("passes deployId and signal fields into the Groq prompt", async () => {
+    groqOk();
 
     await handleIncident({
       deployId: "deploy-xyz",
       signal: { url: "/checkout", status: 502, latencyMs: 8000 },
     });
 
-    const call = mockSarvamChat.mock.calls[0]![0];
+    const call = mockGroqChat.mock.calls[0]![0];
     const userMsg = call.messages.find((m: { role: string }) => m.role === "user").content as string;
     expect(userMsg).toContain("deploy-xyz");
     expect(userMsg).toContain("502");
@@ -162,7 +162,7 @@ describe("handleIncident — Sarvam causal chain", () => {
   });
 
   it("includes parsedLog summary in prompt when Gemini returns a summary", async () => {
-    sarvamOk();
+    groqOk();
     mockGeminiAnalyze.mockResolvedValueOnce({ content: "Gemini summary: NullPointerException at line 42." });
 
     await handleIncident({
@@ -171,13 +171,13 @@ describe("handleIncident — Sarvam causal chain", () => {
       signal: { log: "A".repeat(400) },
     });
 
-    const call = mockSarvamChat.mock.calls[0]![0];
+    const call = mockGroqChat.mock.calls[0]![0];
     const userMsg = call.messages.find((m: { role: string }) => m.role === "user").content as string;
     expect(userMsg).toContain("Gemini summary");
   });
 
   it("does NOT call Gemini when signal has no long text", async () => {
-    sarvamOk();
+    groqOk();
 
     await handleIncident({
       deployId: "deploy-abc",
@@ -188,7 +188,7 @@ describe("handleIncident — Sarvam causal chain", () => {
   });
 
   it("causalChain entries have correct shape", async () => {
-    sarvamOk(4);
+    groqOk(4);
 
     const doc = await handleIncident({
       deployId: "deploy-abc",
@@ -206,9 +206,9 @@ describe("handleIncident — Sarvam causal chain", () => {
 
 // ── handleIncident — deterministic fallback ───────────────────────────────────
 
-describe("handleIncident — deterministic fallback (Sarvam unavailable)", () => {
+describe("handleIncident — deterministic fallback (Groq unavailable)", () => {
   it("falls back gracefully and still returns a valid Incident", async () => {
-    mockSarvamChat.mockRejectedValueOnce(new Error("Sarvam down"));
+    mockGroqChat.mockRejectedValueOnce(new Error("Groq down"));
 
     const doc = await handleIncident({
       deployId: "deploy-abc",
@@ -221,7 +221,7 @@ describe("handleIncident — deterministic fallback (Sarvam unavailable)", () =>
   });
 
   it("fallback includes HTTP 500 evidence in causal chain", async () => {
-    mockSarvamChat.mockRejectedValueOnce(new Error("Sarvam down"));
+    mockGroqChat.mockRejectedValueOnce(new Error("Groq down"));
 
     const doc = await handleIncident({
       deployId: "deploy-abc",
@@ -233,7 +233,7 @@ describe("handleIncident — deterministic fallback (Sarvam unavailable)", () =>
   });
 
   it("fallback recommends rollback on HTTP 5xx", async () => {
-    mockSarvamChat.mockRejectedValueOnce(new Error("down"));
+    mockGroqChat.mockRejectedValueOnce(new Error("down"));
 
     const doc = await handleIncident({
       deployId: "deploy-abc",
@@ -244,7 +244,7 @@ describe("handleIncident — deterministic fallback (Sarvam unavailable)", () =>
   });
 
   it("fallback: no rollback for low baselineDelta", async () => {
-    mockSarvamChat.mockRejectedValueOnce(new Error("down"));
+    mockGroqChat.mockRejectedValueOnce(new Error("down"));
 
     const doc = await handleIncident({
       deployId: "deploy-abc",
@@ -259,7 +259,7 @@ describe("handleIncident — deterministic fallback (Sarvam unavailable)", () =>
 
 describe("handleIncident — signal parsing", () => {
   it("accepts a raw string as the signal", async () => {
-    sarvamOk();
+    groqOk();
 
     const doc = await handleIncident({
       deployId: "deploy-abc",
@@ -271,7 +271,7 @@ describe("handleIncident — signal parsing", () => {
   });
 
   it("accepts an unknown shape gracefully", async () => {
-    sarvamOk();
+    groqOk();
 
     const doc = await handleIncident({
       deployId: "deploy-abc",
@@ -282,7 +282,7 @@ describe("handleIncident — signal parsing", () => {
   });
 
   it("baselineDelta is 0 when no latency or status information", async () => {
-    sarvamOk();
+    groqOk();
 
     const doc = await handleIncident({
       deployId: "deploy-abc",

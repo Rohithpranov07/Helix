@@ -98,11 +98,11 @@ const sections: Array<TocItem & { body: string[] }> = [
     ],
   },
   {
-    id: "sponsor-sarvam",
-    title: "Sarvam — Primary LLM",
+    id: "sponsor-groq",
+    title: "Qwen3.6-27B — Primary LLM",
     depth: 3,
     body: [
-      "All reasoning, patch synthesis, drift judgement, causal reconstruction, behaviour-equivalence judgement, test/assertion generation, Bulbul TTS, and Saaras STT run through Sarvam. It's the default and dominant AI provider across nearly every organ.",
+      "All reasoning, patch synthesis, drift judgement, causal reconstruction, behaviour-equivalence judgement, and test/assertion generation run through Qwen3.6-27B (served via the NVIDIA OpenAI-compatible API). It's the default and dominant AI provider across nearly every organ.",
     ],
   },
   {
@@ -110,7 +110,7 @@ const sections: Array<TocItem & { body: string[] }> = [
     title: "Gemini — Wide-Context Reads",
     depth: 3,
     body: [
-      "Gemini is used only where Sarvam can't substitute: whole-repo wide-context reads — entropy field computation, intent-code base-pairing across many files at once, and log/UI parsing for the Resurrection Reflex. Never for reasoning, patches, or judgement.",
+      "Gemini is used only where Qwen3.6-27B can't substitute: whole-repo wide-context reads — entropy field computation, intent-code base-pairing across many files at once, and log/UI parsing for the Resurrection Reflex. Never for reasoning, patches, or judgement.",
     ],
   },
   {

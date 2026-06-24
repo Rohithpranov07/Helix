@@ -244,7 +244,7 @@ export default function IncidentsPage() {
           className="mt-5 max-w-md text-[14px] leading-relaxed font-semibold"
           style={{ color: `${INK}99`, textWrap: "balance" as React.CSSProperties["textWrap"] }}
         >
-          Detects Railway failures, reconstructs causal chains via Sarvam, and proposes minimal fixes — MTTR measured in seconds, not hours.
+          Detects Railway failures, reconstructs causal chains via Qwen3.6-27B, and proposes minimal fixes — MTTR measured in seconds, not hours.
         </motion.p>
       </motion.div>
 

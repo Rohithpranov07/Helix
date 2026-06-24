@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { ExternalApiError } from "@helix/shared";
-import { chat, type ChatMessage, type ChatResult } from "./sarvam.js";
+import { chat, type ChatMessage, type ChatResult } from "./groq.js";
 import { withRetry } from "./_retry.js";
 
 export interface ReasonOptions {
@@ -20,10 +20,10 @@ export async function reason(opts: ReasonOptions): Promise<ChatResult> {
   try {
     return await chat(opts);
   } catch (err) {
-    // Auto-fallback: Sarvam credits exhausted → sovereign if configured
+    // Auto-fallback: Groq credits/rate exhausted → sovereign if configured
     if (
       err instanceof ExternalApiError &&
-      err.provider === "sarvam" &&
+      err.provider === "groq" &&
       err.statusCode != null &&
       CREDIT_EXHAUSTED.has(err.statusCode) &&
       process.env["HELIX_SOVEREIGN_BASE"]

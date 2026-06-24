@@ -8,7 +8,7 @@ vi.mock("@helix/db", () => ({
   updateVulnerability: vi.fn().mockResolvedValue(null),
 }));
 vi.mock("@helix/ai", () => ({
-  sarvam: {
+  groq: {
     chat: vi.fn(),
   },
 }));
@@ -20,7 +20,7 @@ import {
   type Patch,
   type ShadowApplier,
 } from "../immune/patch.js";
-import { sarvam } from "@helix/ai";
+import { groq } from "@helix/ai";
 import { updateVulnerability } from "@helix/db";
 
 function makeFinding(
@@ -48,17 +48,17 @@ const SQLI_PATCH: Patch = {
 };
 
 beforeEach(() => {
-  vi.mocked(sarvam.chat).mockReset();
+  vi.mocked(groq.chat).mockReset();
   vi.mocked(updateVulnerability).mockClear();
 });
 
 // ── synthesizePatch ───────────────────────────────────────────────────────────
 
 describe("synthesizePatch", () => {
-  it("returns a Zod-valid patch from Sarvam JSON output", async () => {
-    vi.mocked(sarvam.chat).mockResolvedValue({
+  it("returns a Zod-valid patch from Groq JSON output", async () => {
+    vi.mocked(groq.chat).mockResolvedValue({
       content: JSON.stringify(SQLI_PATCH),
-      model: "sarvam-105b",
+      model: "qwen3.6-27b",
     });
 
     const finding = makeFinding({ class: "SQLi" });
@@ -70,14 +70,14 @@ describe("synthesizePatch", () => {
   });
 
   it("sends the class-appropriate strategy in the prompt", async () => {
-    vi.mocked(sarvam.chat).mockResolvedValue({
+    vi.mocked(groq.chat).mockResolvedValue({
       content: JSON.stringify(SQLI_PATCH),
-      model: "sarvam-105b",
+      model: "qwen3.6-27b",
     });
 
     await synthesizePatch(makeFinding({ class: "SQLi" }));
 
-    const callArg = vi.mocked(sarvam.chat).mock.calls[0]![0];
+    const callArg = vi.mocked(groq.chat).mock.calls[0]![0];
     const userMsg = callArg.messages.find((m) => m.role === "user")!.content;
     expect(userMsg).toContain("SQLi");
     expect(userMsg).toContain("parameterized");
@@ -85,12 +85,12 @@ describe("synthesizePatch", () => {
   });
 
   it("rejects a patch that escapes the target app via path", async () => {
-    vi.mocked(sarvam.chat).mockResolvedValue({
+    vi.mocked(groq.chat).mockResolvedValue({
       content: JSON.stringify({
         files: [{ path: "packages/engine/src/index.ts", diff: "--- a\n+++ b\n@@\n-x\n+y" }],
         rationale: "malicious",
       }),
-      model: "sarvam-105b",
+      model: "qwen3.6-27b",
     });
 
     await expect(synthesizePatch(makeFinding({ class: "SQLi" }))).rejects.toThrow(ValidationError);

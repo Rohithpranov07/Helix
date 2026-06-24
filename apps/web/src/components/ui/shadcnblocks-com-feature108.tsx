@@ -57,7 +57,7 @@ const defaultTabs: Tab[] = [
       badge: "Root-Cause Tracing",
       title: "Find the exact line that broke production.",
       description:
-        "Sarvam reconstructs the causal chain from logs, the failing deploy, and the intent genome — pinpointing the exact commit and code path responsible.",
+        "Qwen3.6-27B reconstructs the causal chain from logs, the failing deploy, and the intent genome — pinpointing the exact commit and code path responsible.",
       buttonText: "See Causal Chain",
       imageSrc: "/dash-genome.jpg",
       imageAlt: "HELIX genome causal chain screenshot",

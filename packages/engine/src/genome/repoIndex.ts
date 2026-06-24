@@ -6,14 +6,14 @@
  *   2. Filter to source files; group into logical modules by top-level directory.
  *   3. Identify intent documents (README, PRD, SPEC, ARCHITECTURE, *.md in root).
  *   4. For each module: Gemini reads code + intent docs together (wide-context).
- *      Sarvam extracts a structured IntentStrand (strict-JSON).
+ *      Groq extracts a structured IntentStrand (strict-JSON).
  *   5. Persist / upsert each strand in the intent_strand collection.
  *
- * Per §3 stack mapping: Gemini = whole-codebase base-pairing; Sarvam = extraction.
+ * Per §3 stack mapping: Gemini = whole-codebase base-pairing; Groq = extraction.
  */
 import type { IntentStrand } from "@helix/shared";
 import { connectDb, createIntentStrand, updateIntentStrand, listIntentStrands } from "@helix/db";
-import { gemini, sarvam } from "@helix/ai";
+import { gemini, groq } from "@helix/ai";
 import { z } from "zod";
 import { getRepoTree, readFile } from "./github.js";
 
@@ -41,20 +41,62 @@ const MAX_FILE_SIZE = 80_000;  // bytes — skip very large files
 const MAX_FILES_PER_MODULE = 30;
 const MAX_CONTENT_PER_MODULE = 60_000; // chars fed to Gemini
 
-// ── Schema for Sarvam JSON output ─────────────────────────────────────────────
+// ── Schema for Groq JSON output ─────────────────────────────────────────────
+//
+// Qwen3.6-27B often emits a looser shape than asked — e.g. invariants as a bare
+// array of strings, or objects keyed `name`/`description` instead of
+// `rule`/`rationale`. Rather than reject (which forces slow repair round-trips
+// or drops the module), accept these forms and normalise them below. This is the
+// core "flakiness" fix on the engine side.
 
-const InvariantOutputSchema = z.object({
-  id: z.string(),
-  rule: z.string(),
-  rationale: z.string(),
-  compliance: z.boolean().optional(),
-});
+const LooseInvariantSchema = z.union([
+  z.string(),
+  z.object({
+    id: z.string().optional(),
+    rule: z.string().optional(),
+    name: z.string().optional(),
+    title: z.string().optional(),
+    description: z.string().optional(),
+    rationale: z.string().optional(),
+    reason: z.string().optional(),
+    compliance: z.boolean().optional(),
+  }),
+]);
 
 const IntentStrandOutputSchema = z.object({
   purpose: z.string(),
-  invariants: z.array(InvariantOutputSchema).default([]),
-  edgeDecisions: z.array(z.string()).default([]),
+  invariants: z.array(LooseInvariantSchema).default([]),
+  edgeDecisions: z.array(z.union([z.string(), z.object({}).passthrough()])).default([]),
 });
+
+type NormalizedInvariant = { id: string; rule: string; rationale: string; compliance?: boolean };
+
+function normalizeInvariants(raw: z.infer<typeof IntentStrandOutputSchema>["invariants"]): NormalizedInvariant[] {
+  const out: NormalizedInvariant[] = [];
+  raw.forEach((item, i) => {
+    const id = `inv-${i + 1}`;
+    if (typeof item === "string") {
+      if (item.trim()) out.push({ id, rule: item.trim(), rationale: "" });
+      return;
+    }
+    const rule = item.rule ?? item.name ?? item.title ?? item.description ?? "";
+    const rationale = item.rationale ?? item.reason ?? (item.rule ? (item.description ?? "") : "");
+    if (!rule.trim()) return;
+    out.push({
+      id: item.id ?? id,
+      rule: rule.trim(),
+      rationale: rationale.trim(),
+      ...(item.compliance !== undefined ? { compliance: item.compliance } : {}),
+    });
+  });
+  return out;
+}
+
+function normalizeEdgeDecisions(raw: z.infer<typeof IntentStrandOutputSchema>["edgeDecisions"]): string[] {
+  return raw
+    .map((d) => (typeof d === "string" ? d : JSON.stringify(d)))
+    .filter((d) => d.trim().length > 0);
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -180,8 +222,8 @@ export async function indexGitHubRepo(
       geminiSummary = `Module: ${modName} in ${owner}/${repo}. Files: ${selected.join(", ")}`;
     }
 
-    // 4b. Sarvam strict-JSON: extract structured intent strand
-    const strandResult = await sarvam.chat({
+    // 4b. Groq strict-JSON: extract structured intent strand
+    const strandResult = await groq.chat({
       messages: [
         {
           role: "system",
@@ -189,7 +231,14 @@ export async function indexGitHubRepo(
             "You are HELIX Genome. Extract a structured intent strand from the provided code module.\n" +
             "Output ONLY valid JSON with EXACTLY these fields, no others:\n" +
             '{"purpose":"string","invariants":[{"id":"string","rule":"string","rationale":"string"}],"edgeDecisions":["string"]}\n' +
-            "invariants must capture every critical business rule and security constraint visible in the code.\n" +
+            "invariants must capture every critical business rule AND security constraint the module SHOULD uphold.\n" +
+            "Always state the security invariant as what MUST be true (the correct behaviour), even if the current code violates it. " +
+            "In particular, for modules that touch these areas, emit the matching invariant:\n" +
+            "  - SQL/DB queries with user input → 'all queries must be parameterized (no string interpolation of user input)'.\n" +
+            "  - rendering user-controlled data → 'user content must be escaped, never rendered as raw HTML'.\n" +
+            "  - protected routes/handlers → 'requests must be authenticated and authorized before any action'.\n" +
+            "  - clients/config holding keys → 'service-role keys/secrets must never be exposed to client-side or bundled code'.\n" +
+            "  - DB tables/migrations with per-user rows → 'sensitive tables must have Row-Level Security (RLS) enabled with a policy'.\n" +
             "If no invariants are found, output an empty array. Do NOT add any extra fields.",
         },
         {
@@ -210,15 +259,10 @@ export async function indexGitHubRepo(
     const strandDoc: IntentStrand = {
       moduleId,
       purpose: strand.purpose,
-      invariants: strand.invariants.map((inv) => ({
-        id: inv.id,
-        rule: inv.rule,
-        rationale: inv.rationale,
-        ...(inv.compliance !== undefined ? { compliance: inv.compliance } : {}),
-      })),
-      edgeDecisions: strand.edgeDecisions,
+      invariants: normalizeInvariants(strand.invariants),
+      edgeDecisions: normalizeEdgeDecisions(strand.edgeDecisions),
       sourcePrompt: `Indexed from GitHub ${owner}/${repo} module ${modName}`,
-      generatedBy: { model: "sarvam-m1", version: "1.0" },
+      generatedBy: { model: "qwen3.6-27b", version: "1.0" },
       pairing: {
         score: 1.0, // initial — will be updated by drift detection
         lastChecked: new Date().toISOString(),

@@ -16,8 +16,8 @@
  * so the function is fully testable without filesystem or network access.
  *
  * Gemini is used here per CLAUDE.md: "Gemini = LOW SURFACE AREA ONLY — used only
- * for whole-repo wide-context reads where Sarvam cannot substitute: entropy field
- * computation". Sarvam is never called in this module.
+ * for whole-repo wide-context reads where Groq cannot substitute: entropy field
+ * computation". Groq is never called in this module.
  */
 import { z } from "zod";
 import { readdirSync, readFileSync, existsSync } from "fs";

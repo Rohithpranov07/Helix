@@ -10,7 +10,7 @@ const {
   mockCreateIntentStrand,
   mockUpdateIntentStrand,
   mockListIntentStrands,
-  mockSarvamChat,
+  mockGroqChat,
   mockReadFileSync,
   mockExistsSync,
 } = vi.hoisted(() => ({
@@ -18,7 +18,7 @@ const {
   mockCreateIntentStrand: vi.fn(),
   mockUpdateIntentStrand: vi.fn(),
   mockListIntentStrands: vi.fn(),
-  mockSarvamChat: vi.fn(),
+  mockGroqChat: vi.fn(),
   mockReadFileSync: vi.fn(),
   mockExistsSync: vi.fn(),
 }));
@@ -31,7 +31,7 @@ vi.mock("@helix/db", () => ({
 }));
 
 vi.mock("@helix/ai", () => ({
-  sarvam: { chat: mockSarvamChat },
+  groq: { chat: mockGroqChat },
 }));
 
 vi.mock("fs", () => ({
@@ -46,7 +46,7 @@ import { captureIntent, SHOPLITE_MODULES } from "../genome/capture.js";
 const MODULE_PATH = "apps/target/src/app/api/products/search/route.ts";
 const MOCK_SOURCE = `export async function GET(req: Request) { /* SQLi vuln */ }`;
 
-function makeSarvamOutput() {
+function makeGroqOutput() {
   return JSON.stringify({
     purpose: "Provides product search functionality via GET endpoint.",
     invariants: [
@@ -72,7 +72,7 @@ function makeStrand(overrides: Partial<IntentStrand> = {}): HelixDoc<IntentStran
     ],
     edgeDecisions: ["Falls back to mock data when Supabase unavailable."],
     sourcePrompt: "Auto-captured",
-    generatedBy: { model: "sarvam-m", version: "1" },
+    generatedBy: { model: "qwen3.6-27b", version: "1" },
     pairing: { score: 1.0, lastChecked: new Date().toISOString(), unpairedInvariants: [] },
     ...overrides,
   } as HelixDoc<IntentStrand>;
@@ -83,14 +83,14 @@ beforeEach(() => {
   mockCreateIntentStrand.mockClear();
   mockUpdateIntentStrand.mockClear();
   mockListIntentStrands.mockClear();
-  mockSarvamChat.mockClear();
+  mockGroqChat.mockClear();
   mockReadFileSync.mockClear();
   mockExistsSync.mockClear();
 
-  // Default: file exists, Sarvam returns valid output, no existing strand
+  // Default: file exists, Groq returns valid output, no existing strand
   mockExistsSync.mockReturnValue(true);
   mockReadFileSync.mockReturnValue(MOCK_SOURCE);
-  mockSarvamChat.mockResolvedValue({ content: makeSarvamOutput() });
+  mockGroqChat.mockResolvedValue({ content: makeGroqOutput() });
   mockListIntentStrands.mockResolvedValue([]);
   mockCreateIntentStrand.mockResolvedValue(makeStrand());
   mockUpdateIntentStrand.mockResolvedValue(makeStrand());
@@ -124,10 +124,10 @@ describe("captureIntent — create (first capture)", () => {
     expect(call.pairing.unpairedInvariants).toHaveLength(0);
   });
 
-  it("sets generatedBy.model to sarvam-m", async () => {
+  it("sets generatedBy.model to qwen3.6-27b", async () => {
     await captureIntent(MODULE_PATH);
     const call = mockCreateIntentStrand.mock.calls[0]?.[0] as IntentStrand;
-    expect(call.generatedBy.model).toBe("sarvam-m");
+    expect(call.generatedBy.model).toBe("qwen3.6-27b");
   });
 
   it("passes context as sourcePrompt when provided", async () => {
@@ -144,9 +144,9 @@ describe("captureIntent — create (first capture)", () => {
     );
   });
 
-  it("sends source code to Sarvam", async () => {
+  it("sends source code to Groq", async () => {
     await captureIntent(MODULE_PATH);
-    const chatCall = mockSarvamChat.mock.calls[0]?.[0] as { messages: Array<{ role: string; content: string }> };
+    const chatCall = mockGroqChat.mock.calls[0]?.[0] as { messages: Array<{ role: string; content: string }> };
     const userMsg = chatCall.messages.find((m) => m.role === "user")?.content ?? "";
     expect(userMsg).toContain(MOCK_SOURCE.slice(0, 50));
   });
@@ -188,23 +188,23 @@ describe("captureIntent — update (strand already exists)", () => {
   });
 });
 
-// ── Sarvam validation ─────────────────────────────────────────────────────────
+// ── Groq validation ─────────────────────────────────────────────────────────
 
-describe("captureIntent — Sarvam output validation", () => {
-  it("extracts invariants from Sarvam response", async () => {
+describe("captureIntent — Groq output validation", () => {
+  it("extracts invariants from Groq response", async () => {
     await captureIntent(MODULE_PATH);
     const call = mockCreateIntentStrand.mock.calls[0]?.[0] as IntentStrand;
     expect(call.invariants.length).toBeGreaterThanOrEqual(2);
   });
 
-  it("extracts edgeDecisions from Sarvam response", async () => {
+  it("extracts edgeDecisions from Groq response", async () => {
     await captureIntent(MODULE_PATH);
     const call = mockCreateIntentStrand.mock.calls[0]?.[0] as IntentStrand;
     expect(call.edgeDecisions.length).toBeGreaterThanOrEqual(1);
   });
 
-  it("falls back to deterministic extraction when Sarvam fails", async () => {
-    mockSarvamChat.mockRejectedValue(new Error("API timeout"));
+  it("falls back to deterministic extraction when Groq fails", async () => {
+    mockGroqChat.mockRejectedValue(new Error("API timeout"));
     await captureIntent(MODULE_PATH, "compliance refund approval");
 
     expect(mockCreateIntentStrand).toHaveBeenCalledTimes(1);
@@ -213,7 +213,7 @@ describe("captureIntent — Sarvam output validation", () => {
   });
 
   it("deterministic fallback sets compliance:true when context mentions compliance", async () => {
-    mockSarvamChat.mockRejectedValue(new Error("timeout"));
+    mockGroqChat.mockRejectedValue(new Error("timeout"));
     await captureIntent(MODULE_PATH, "COMPLIANCE: refund approval required");
 
     const call = mockCreateIntentStrand.mock.calls[0]?.[0] as IntentStrand;
@@ -233,10 +233,10 @@ describe("captureIntent — file validation", () => {
     expect((err as ValidationError).message).toMatch(/not found/i);
   });
 
-  it("does not call Sarvam when file does not exist", async () => {
+  it("does not call Groq when file does not exist", async () => {
     mockExistsSync.mockReturnValue(false);
     await captureIntent("nonexistent/file.ts").catch(() => null);
-    expect(mockSarvamChat).not.toHaveBeenCalled();
+    expect(mockGroqChat).not.toHaveBeenCalled();
   });
 });
 

@@ -4,11 +4,11 @@
  */
 
 import { z } from "zod";
-import { sarvam, embed, reason } from "../src/index.js";
+import { groq, embed, reason } from "../src/index.js";
 
 async function testChat() {
-  console.log("\n--- sarvam.chat (plain) ---");
-  const res = await sarvam.chat({
+  console.log("\n--- groq.chat (plain) ---");
+  const res = await groq.chat({
     messages: [
       { role: "system", content: "You are a helpful assistant. Keep answers to one sentence." },
       { role: "user", content: "What is HELIX in the context of autonomous software?" },
@@ -19,9 +19,9 @@ async function testChat() {
 }
 
 async function testChatJson() {
-  console.log("\n--- sarvam.chat (json + schema) ---");
+  console.log("\n--- groq.chat (json + schema) ---");
   const schema = z.object({ answer: z.string(), confidence: z.number().min(0).max(1) });
-  const res = await sarvam.chat({
+  const res = await groq.chat({
     messages: [
       {
         role: "user",
@@ -39,8 +39,8 @@ async function testTts() {
     console.log("\n--- TTS skipped (SKIP_TTS=1) ---");
     return;
   }
-  console.log("\n--- sarvam.tts ---");
-  const buf = await sarvam.tts({ text: "HELIX is alive.", languageCode: "en-IN" });
+  console.log("\n--- groq.tts ---");
+  const buf = await groq.tts({ text: "HELIX is alive.", languageCode: "en-IN" });
   console.log(`received ${buf.length} bytes of WAV audio`);
 }
 

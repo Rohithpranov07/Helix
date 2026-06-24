@@ -5,9 +5,9 @@
  *   1. Find the latest FAILED/CRASHED deployment for the given Railway project.
  *   2. Fetch build + deployment logs.
  *   3. Gemini parses logs → structured failure summary (wide-context).
- *   4. Sarvam reconstructs causal chain (strict-JSON).
+ *   4. Groq reconstructs causal chain (strict-JSON).
  *   5. Fetch source files from GitHub (using connected OAuth token).
- *   6. Sarvam synthesizes minimal patches targeting actual repo files (strict-JSON).
+ *   6. Groq synthesizes minimal patches targeting actual repo files (strict-JSON).
  *   7. Create shadow branch on GitHub.
  *   8. Persist IncidentPatch with status = 'pending_approval'.
  *
@@ -16,7 +16,7 @@
  *
  * Per §7 spec and CLAUDE.md:
  *   - Gemini = log/UI parsing only (wide-context).
- *   - Sarvam = causal chain reconstruction + patch synthesis.
+ *   - Groq = causal chain reconstruction + patch synthesis.
  *   - Shadow invariant enforced: files are written to shadow branch only; no production write until PR is merged.
  */
 
@@ -29,7 +29,7 @@ import {
   updateIncidentPatch,
   createShadowProof,
 } from "@helix/db";
-import { gemini, sarvam } from "@helix/ai";
+import { gemini, groq } from "@helix/ai";
 import { z } from "zod";
 import {
   getRepo,
@@ -46,7 +46,7 @@ import {
   findLatestFailedDeployment,
 } from "./railway.js";
 
-// ── Sarvam JSON schemas ───────────────────────────────────────────────────────
+// ── Groq JSON schemas ───────────────────────────────────────────────────────
 
 const CausalChainSchema = z.object({
   failureSummary: z.string(),
@@ -161,8 +161,8 @@ export async function detectAndHealRailwayFailure(
     geminiAnalysis = `Deployment ${deployment.id} status: ${deployment.status}.\nLog sample:\n${allLogs.slice(0, 2_000)}`;
   }
 
-  // 4. Sarvam: structured causal chain (strict-JSON)
-  const causalResult = await sarvam.chat({
+  // 4. Groq: structured causal chain (strict-JSON)
+  const causalResult = await groq.chat({
     messages: [
       {
         role: "system",
@@ -233,12 +233,12 @@ export async function detectAndHealRailwayFailure(
     } catch { /* tree fetch failure is non-fatal */ }
   }
 
-  // 6. Sarvam: synthesize patches targeting real repo files (strict-JSON)
+  // 6. Groq: synthesize patches targeting real repo files (strict-JSON)
   let patchFiles: IncidentPatch["files"] = [];
 
   if (sourceContext) {
     try {
-      const patchResult = await sarvam.chat({
+      const patchResult = await groq.chat({
         messages: [
           {
             role: "system",
@@ -386,7 +386,7 @@ export async function approveIncidentPatch(
       `[HELIX Reflex] Railway failure fix — ${patch.failureSummary.slice(0, 60)}`,
       prBody,
     );
-  } catch (err: any) {
+  } catch (err: unknown) {
     if (err instanceof ExternalApiError && err.message.includes("no history in common")) {
       // Recreate branch from the new head since history was rewritten
       const headSha = await getDefaultBranchSha(token, owner, repo, defaultBranch);

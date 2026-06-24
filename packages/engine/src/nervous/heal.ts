@@ -4,7 +4,7 @@
  * healIncident: given an incident with a causal chain + failing request, HELIX
  *   autonomously closes the loop:
  *
- *   1. Sarvam (PRIMARY LLM) infers the vulnerability class from the causal chain
+ *   1. Groq (PRIMARY LLM) infers the vulnerability class from the causal chain
  *      and synthesizes a minimal unified-diff fix targeted at ShopLite.
  *   2. Applies the patch to the Shadow twin (never the real target).
  *   3. verifyEquivalence proves the failing case now passes, zero regressions.
@@ -19,7 +19,7 @@
  * so this module is safe to import before Shadow is available.
  *
  * Wire: `incidentHandle` in index.ts calls healIncident automatically when the
- * incident's rollbackAt field is set (i.e. Sarvam recommended rollback).
+ * incident's rollbackAt field is set (i.e. Groq recommended rollback).
  */
 import { z } from "zod";
 import { mkdirSync, writeFileSync } from "fs";
@@ -31,7 +31,7 @@ import {
   type VulnClass,
   type ShadowProof,
 } from "@helix/shared";
-import { sarvam } from "@helix/ai";
+import { groq } from "@helix/ai";
 import { connectDb, updateIncident } from "@helix/db";
 import type { HelixDoc } from "@helix/db";
 import { assertPatchSafe, type Patch, type ShadowApplyResult } from "../immune/patch.js";
@@ -44,7 +44,7 @@ import { extractEndpoint } from "./resolve.js";
 const REPO_ROOT = resolve(__dirname, "../../../../");
 const SHADOW_STAGING = resolve(REPO_ROOT, "shadow/staging");
 
-// ── Incident patch synthesis (Sarvam) ─────────────────────────────────────────
+// ── Incident patch synthesis (Groq) ─────────────────────────────────────────
 
 /** Internal synthesis result — patch + metadata needed to write staging meta.json. */
 export interface IncidentSynthResult {
@@ -108,13 +108,13 @@ function buildSynthPrompt(incident: HelixDoc<Incident>): string {
 }
 
 /**
- * Sarvam synthesizes a targeted fix from the incident's causal chain.
+ * Groq synthesizes a targeted fix from the incident's causal chain.
  * Returns the patch plus the inferred class + endpoint for staging meta.json.
  */
 export async function synthesizeIncidentPatch(
   incident: HelixDoc<Incident>,
 ): Promise<IncidentSynthResult> {
-  const result = await sarvam.chat({
+  const result = await groq.chat({
     messages: [
       { role: "system", content: INCIDENT_SYNTH_SYSTEM },
       { role: "user", content: buildSynthPrompt(incident) },
@@ -216,7 +216,7 @@ export async function healIncident(
   let lastProof: ShadowProof | undefined;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    // 1. Sarvam synthesizes a targeted patch from the causal chain + failing request.
+    // 1. Groq synthesizes a targeted patch from the causal chain + failing request.
     const { patch, inferredClass, endpoint } = await synthesize(incident);
 
     // 2. Apply to Shadow only — never the real target.

@@ -10,8 +10,8 @@ HELIX is an autonomous living layer for AI-built software — modelled as an org
 
 ```mermaid
 graph TD
-    subgraph Cognition ["Cognition — Sarvam AI (primary)"]
-        S[sarvam-105b\nreasoning · patch · drift judgement\nBulbul TTS · Saaras STT]
+    subgraph Cognition ["Cognition — Qwen3.6-27B via Groq (primary)"]
+        S[qwen/qwen3.6-27b\nreasoning · patch · drift judgement]
     end
 
     subgraph Perception ["Perception — Gemini (wide-context reads only)"]
@@ -86,15 +86,15 @@ graph TD
 
 | Tool | Role | Used for |
 |------|------|---------|
-| **Sarvam AI** (primary) | Cognition | All reasoning, patch synthesis, drift judgement, causal reconstruction, behaviour-equivalence judgement, test/assertion generation, Bulbul TTS, Saaras STT |
+| **Qwen3.6-27B via Groq** (primary) | Cognition | All reasoning, patch synthesis, drift judgement, causal reconstruction, behaviour-equivalence judgement, test/assertion generation |
 | **Gemini** (low-surface) | Perception | Wide-context reads only — entropy field computation, intent–code base-pairing across many files, log/UI parsing for Resurrection Reflex |
 | **MongoDB Atlas** | Biology / memory | Intent genome, vector antibody library (1536-dim cosine), entropy time-series, incident & proof records |
 | **n8n** | Autonomic wiring | Reflex arcs (scan → heal, incident → resurrect), scheduled metabolic loops |
 
 ### Fallback chain
 
-- **Sovereign fallback** — set `HELIX_SOVEREIGN=1` + `HELIX_SOVEREIGN_BASE=<OpenAI-compat URL>` to route all reasoning to a local open-weight model. Activates automatically on Sarvam 402/429 (credit exhaustion) when `HELIX_SOVEREIGN_BASE` is configured.
-- **Voice fallback** — `ttsSafe()` returns `null` on TTS failure; callers print text instead of playing audio.
+- **Sovereign fallback** — set `HELIX_SOVEREIGN=1` + `HELIX_SOVEREIGN_BASE=<OpenAI-compat URL>` to route all reasoning to a local open-weight model. Activates automatically on Groq 402/429 (credit/rate exhaustion) when `HELIX_SOVEREIGN_BASE` is configured.
+- **Rate-limit handling** — the Groq client serialises + throttles requests, honours `Retry-After` on 429, and shrinks `max_tokens` on 413 (free-tier TPM cap).
 - **Vector search fallback** — `matchAntibody()` tries Atlas `$vectorSearch` first; falls back to in-memory cosine similarity when the Atlas index is unavailable.
 
 ---
@@ -109,7 +109,7 @@ helix/
 ├── packages/
 │   ├── shared/         # Types, contracts, error classes — import only, never redefine
 │   ├── db/             # Mongoose models, Zod validators, repos, vector index
-│   ├── ai/             # Sarvam + Gemini clients (chat, embed, TTS, STT)
+│   ├── ai/             # Groq (Qwen3.6) + Gemini clients (chat, embed)
 │   └── engine/         # All organ logic (genome, immune, memory, metabolism,
 │                       #   nervous, shadow, governor)
 ├── shadow/             # Shadow twin runtime (Docker, :3002)
@@ -128,8 +128,8 @@ helix/
 
 - Designed and implemented the **Immune System** organ — `repoScan`, `scanner`, `heal`, `patch`, `confirm`, `promote` — including the full red-team attack pipeline against ShopLite
 - Built the **Immune Memory** organ — `mintAntibody`, `matchAntibody`, `blockRecurrence` — with 1536-dim vector embeddings and Atlas `$vectorSearch` + in-memory cosine fallback
-- Integrated **Sarvam AI** as the primary cognition layer across all reasoning paths: patch synthesis, drift judgement, causal reconstruction, behaviour-equivalence judgement, and test/assertion generation
-- Implemented sovereign fallback (`HELIX_SOVEREIGN`) routing all AI ops to a local open-weight endpoint on Sarvam 402/429
+- Integrated **Qwen3.6-27B (via Groq)** as the primary cognition layer across all reasoning paths: patch synthesis, drift judgement, causal reconstruction, behaviour-equivalence judgement, and test/assertion generation
+- Implemented sovereign fallback (`HELIX_SOVEREIGN`) routing all AI ops to a local open-weight endpoint on rate/credit exhaustion
 - Wired **n8n** reflex arcs: scan → heal loop, scheduled attack runs, and re-attack confirmation step
 - Authored `packages/engine/src/__tests__/` test suites for `capture`, `heal`, `mint`, `recall`, `patch`, `promote`, `scanner`
 
@@ -199,7 +199,7 @@ Edit `.env` — required keys:
 
 | Key | Purpose |
 |-----|---------|
-| `SARVAM_API_KEY` | Primary AI — all reasoning and voice |
+| `GROQ_API_KEY` | Primary AI — Qwen3.6-27B via Groq (all reasoning) |
 | `GEMINI_API_KEY` | Perception — entropy + genome pairing |
 | `MONGODB_URI` | `mongodb+srv://<user>:<pass>@cluster...` |
 | `N8N_ENCRYPTION_KEY` | `openssl rand -hex 16` |
@@ -247,7 +247,7 @@ docker compose -f shadow/docker-compose.yml up -d --build
 
 ```bash
 # ── AI (Cognition + Perception) ───────────────────────────────────────────────
-SARVAM_API_KEY=              # Primary LLM (required for all AI ops)
+GROQ_API_KEY=                # Primary LLM — Qwen3.6-27B via Groq (required for all AI ops)
 GEMINI_API_KEY=              # Wide-context perception (entropy + pairing)
 HELIX_SOVEREIGN=0            # Set 1 to route reasoning to local open-weight model
 HELIX_SOVEREIGN_BASE=        # OpenAI-compat base URL (required when SOVEREIGN=1)

@@ -35,7 +35,7 @@ vi.mock("@helix/db", () => {
 });
 
 vi.mock("@helix/ai", () => ({
-  sarvam: {
+  groq: {
     chat: vi.fn().mockResolvedValue({
       content: JSON.stringify({
         regressionTest: `import { describe, it, expect } from 'vitest';
@@ -48,7 +48,7 @@ describe('antibody: SQLi /api/products/search', () => {
 });`,
         runtimeAssertion: "SQL queries must use parameterized placeholders; never interpolate user input.",
       }),
-      model: "sarvam-105b",
+      model: "qwen3.6-27b",
     }),
   },
   embed: vi.fn().mockResolvedValue(Array.from({ length: 1536 }, () => 0.1)),
@@ -65,12 +65,12 @@ vi.mock("fs", async () => {
 });
 
 import { mintAntibody, makeAntibodyId, makeSignature, writeRegressionTest } from "../memory/mint.js";
-import { sarvam, embed } from "@helix/ai";
+import { groq, embed } from "@helix/ai";
 import { createAntibody, updateVulnerability, findAntibodyByAntibodyId } from "@helix/db";
 import { writeFileSync, mkdirSync } from "fs";
 
 beforeEach(() => {
-  vi.mocked(sarvam.chat).mockClear();
+  vi.mocked(groq.chat).mockClear();
   vi.mocked(embed).mockClear();
   vi.mocked(createAntibody).mockClear();
   vi.mocked(updateVulnerability).mockClear();
@@ -123,10 +123,10 @@ describe("mintAntibody — happy path", () => {
     expect(ab.mintedAt).toBeTruthy();
   });
 
-  it("calls sarvam.chat with the vulnerability context in the prompt", async () => {
+  it("calls groq.chat with the vulnerability context in the prompt", async () => {
     await mintAntibody({ type: "vuln", ref: "vuln-001" });
 
-    const call = vi.mocked(sarvam.chat).mock.calls[0]![0];
+    const call = vi.mocked(groq.chat).mock.calls[0]![0];
     const userMsg = call.messages.find((m) => m.role === "user")!.content;
     expect(userMsg).toContain("SQLi");
     expect(userMsg).toContain("/api/products/search");
@@ -181,8 +181,8 @@ describe("mintAntibody — idempotency", () => {
 
     expect(ab.regressionTest).toBe("existing test");
     expect(ab.recurrencesBlocked).toBe(3);
-    // Should NOT call sarvam.chat, embed, createAntibody, or updateVulnerability again
-    expect(sarvam.chat).not.toHaveBeenCalled();
+    // Should NOT call groq.chat, embed, createAntibody, or updateVulnerability again
+    expect(groq.chat).not.toHaveBeenCalled();
     expect(embed).not.toHaveBeenCalled();
     expect(createAntibody).not.toHaveBeenCalled();
     expect(updateVulnerability).not.toHaveBeenCalled();
@@ -196,8 +196,8 @@ describe("mintAntibody — error paths", () => {
     );
   });
 
-  it("uses the deterministic fallback if sarvam.chat throws", async () => {
-    vi.mocked(sarvam.chat).mockRejectedValueOnce(new Error("Sarvam unavailable"));
+  it("uses the deterministic fallback if groq.chat throws", async () => {
+    vi.mocked(groq.chat).mockRejectedValueOnce(new Error("Groq unavailable"));
 
     const ab = await mintAntibody({ type: "vuln", ref: "vuln-001" });
 

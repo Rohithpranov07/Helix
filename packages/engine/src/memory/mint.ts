@@ -6,7 +6,7 @@
  * the antibody collection, and write the regression test into the target app's
  * test suite so any recurrence is caught at CI.
  *
- * Sarvam (PRIMARY LLM) synthesises the regressionTest and runtimeAssertion.
+ * Groq (PRIMARY LLM) synthesises the regressionTest and runtimeAssertion.
  * embed() (Gemini or local) produces the 1536-dim vector for T3.2 recall.
  */
 import { z } from "zod";
@@ -20,7 +20,7 @@ import {
   type AntibodySource,
   type VulnClass,
 } from "@helix/shared";
-import { sarvam, embed } from "@helix/ai";
+import { groq, embed } from "@helix/ai";
 import {
   connectDb,
   createAntibody,
@@ -57,7 +57,7 @@ export function makeSignature(vulnClass: VulnClass, endpoint: string): string {
     .slice(0, 16);
 }
 
-// ── Sarvam synthesis ──────────────────────────────────────────────────────────
+// ── Groq synthesis ──────────────────────────────────────────────────────────
 
 const MintOutputSchema = z.object({
   regressionTest: z.string().min(50),
@@ -96,7 +96,7 @@ function buildSynthPrompt(
   ].join("\n");
 }
 
-// ── Per-class deterministic fallbacks (used when Sarvam is unavailable) ───────
+// ── Per-class deterministic fallbacks (used when Groq is unavailable) ───────
 
 const FALLBACKS: Record<VulnClass, (endpoint: string) => MintOutput> = {
   SQLi: (ep) => ({
@@ -178,7 +178,7 @@ async function synthesise(
   evidence: string,
 ): Promise<MintOutput> {
   try {
-    const result = await sarvam.chat({
+    const result = await groq.chat({
       messages: [
         { role: "system", content: SYNTH_SYSTEM },
         { role: "user", content: buildSynthPrompt(vulnClass, endpoint, evidence) },
@@ -188,7 +188,7 @@ async function synthesise(
     });
     return MintOutputSchema.parse(JSON.parse(result.content));
   } catch {
-    // Sarvam unavailable — use deterministic per-class template.
+    // Groq unavailable — use deterministic per-class template.
     return FALLBACKS[vulnClass](endpoint);
   }
 }
@@ -248,7 +248,7 @@ export interface MintSource {
  * Idempotent: returns the existing antibody if already minted for this class+endpoint.
  *
  * 1. Looks up source context (class, endpoint, evidence).
- * 2. Sarvam synthesises regressionTest + runtimeAssertion.
+ * 2. Groq synthesises regressionTest + runtimeAssertion.
  * 3. embed() computes the 1536-dim vector for T3.2 recall.
  * 4. Persists to the antibody collection (exact §B.2 shape).
  * 5. Writes the regression test to apps/target/src/__tests__/antibodies/.
@@ -270,7 +270,7 @@ export async function mintAntibody(source: MintSource): Promise<Antibody> {
     return existing;
   }
 
-  // Synthesise regressionTest + runtimeAssertion via Sarvam.
+  // Synthesise regressionTest + runtimeAssertion via Groq.
   const { regressionTest, runtimeAssertion } = await synthesise(
     vulnClass,
     endpoint,

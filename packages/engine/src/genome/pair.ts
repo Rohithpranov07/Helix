@@ -4,7 +4,7 @@
  * pairGenome(moduleId, deps?):
  *   1. Gemini reads live source + intent strand invariants (wide-context per CLAUDE.md).
  *   2. Computes pairing.score + unpairedInvariants, flags code-drift and intent-drift.
- *   3. Sarvam explains each mismatch and proposes a minimal correction.
+ *   3. Groq explains each mismatch and proposes a minimal correction.
  *   4. The correction is routed through verifyCorrection (the Shadow gate) before
  *      being marked promotable. No correction can reach the real target without a
  *      shadow_proof with verdict:'promote'. This is the Shadow invariant applied to
@@ -22,7 +22,7 @@ import { z } from "zod";
 import { readFileSync, existsSync } from "fs";
 import { resolve } from "path";
 import { ValidationError, type IntentStrand, type ShadowProof, type VulnClass } from "@helix/shared";
-import { gemini, sarvam } from "@helix/ai";
+import { gemini, groq } from "@helix/ai";
 import { connectDb, listIntentStrands, updateIntentStrand, findGitHubConnection } from "@helix/db";
 import type { HelixDoc } from "@helix/db";
 import { getRepoTree, readFile as ghReadFile } from "./github.js";
@@ -47,9 +47,9 @@ const GeminiPairOutputSchema = z.object({
 
 type GeminiPairOutput = z.infer<typeof GeminiPairOutputSchema>;
 
-// ── Sarvam correction schema ───────────────────────────────────────────────────
+// ── Groq correction schema ───────────────────────────────────────────────────
 
-const SarvamCorrectionSchema = z.object({
+const GroqCorrectionSchema = z.object({
   explanation: z.string().min(10),
   suggestedPatch: z.string().min(5),
 });
@@ -211,7 +211,7 @@ async function geminiAnalyze(
   return GeminiPairOutputSchema.parse(JSON.parse(result.content));
 }
 
-// ── Sarvam mismatch explanation + correction ───────────────────────────────────
+// ── Groq mismatch explanation + correction ───────────────────────────────────
 
 const SARVAM_EXPLAIN_SYSTEM = [
   "You are HELIX's Genome organ explaining an intent-code mismatch.",
@@ -223,12 +223,12 @@ const SARVAM_EXPLAIN_SYSTEM = [
   "Respond ONLY with JSON: { \"explanation\": string, \"suggestedPatch\": string }",
 ].join("\n");
 
-async function sarvamExplain(
+async function groqExplain(
   mismatch: PairMismatch,
   code: string,
   inv: IntentStrand["invariants"][number],
 ): Promise<{ explanation: string; suggestedPatch: string }> {
-  const result = await sarvam.chat({
+  const result = await groq.chat({
     messages: [
       { role: "system", content: SARVAM_EXPLAIN_SYSTEM },
       {
@@ -251,10 +251,10 @@ async function sarvamExplain(
         ].join("\n"),
       },
     ],
-    schema: SarvamCorrectionSchema,
+    schema: GroqCorrectionSchema,
     temperature: 0.2,
   });
-  return SarvamCorrectionSchema.parse(JSON.parse(result.content));
+  return GroqCorrectionSchema.parse(JSON.parse(result.content));
 }
 
 // ── pairGenome ─────────────────────────────────────────────────────────────────
@@ -324,7 +324,7 @@ export async function pairGenome(
     };
   });
 
-  // Sarvam explains each mismatch, proposes a correction, then routes through the
+  // Groq explains each mismatch, proposes a correction, then routes through the
   // Shadow gate (verifyCorrection dep). No correction is promotable without a
   // shadow_proof with verdict:'promote'. This is the Shadow invariant applied to Genome.
   const corrections: CorrectionProposal[] = [];
@@ -337,7 +337,7 @@ export async function pairGenome(
 
     const correctionData = explain
       ? await explain(mismatch, code)
-      : await sarvamExplain(mismatch, code, inv);
+      : await groqExplain(mismatch, code, inv);
 
     // Build the proposal with invariant metadata so verifyCorrection can infer
     // the vulnClass for Shadow traffic case generation (see inferVulnClassFromInvariant).

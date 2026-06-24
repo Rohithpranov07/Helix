@@ -8,7 +8,7 @@
  *   2. If the signal contains long log or HTML text, uses Gemini for structured
  *      extraction (CLAUDE.md: "log/UI parsing for Resurrection Reflex").
  *      Gemini is used HERE and ONLY here — no reasoning, no patches.
- *   3. Uses Sarvam (PRIMARY LLM) to reconstruct the causal chain (3–5 steps)
+ *   3. Uses Groq (PRIMARY LLM) to reconstruct the causal chain (3–5 steps)
  *      and estimate rollbackRecommended + userImpactSeconds.
  *   4. Computes baselineDelta from latency or infers from HTTP status.
  *   5. Persists the incident to MongoDB, returns the document.
@@ -17,7 +17,7 @@
  * deploy failed, linking each step to evidence from the signal.
  */
 import { z } from "zod";
-import { sarvam, gemini } from "@helix/ai";
+import { groq, gemini } from "@helix/ai";
 import { type Incident, type CausalStep } from "@helix/shared";
 import { connectDb, createIncident } from "@helix/db";
 import type { HelixDoc } from "@helix/db";
@@ -102,7 +102,7 @@ async function geminiParseSignal(
   }
 }
 
-// ── Sarvam causal chain reconstruction ───────────────────────────────────────
+// ── Groq causal chain reconstruction ───────────────────────────────────────
 
 const CausalOutputSchema = z.object({
   causalChain: z
@@ -156,12 +156,12 @@ function buildCausalPrompt(
   return lines.join("\n");
 }
 
-async function sarvamCausalChain(
+async function groqCausalChain(
   deployId: string,
   signal: ParsedSignal,
   parsedLog: string | null,
 ): Promise<CausalOutput> {
-  const result = await sarvam.chat({
+  const result = await groq.chat({
     messages: [
       { role: "system", content: CAUSAL_SYSTEM },
       { role: "user", content: buildCausalPrompt(deployId, signal, parsedLog) },
@@ -202,7 +202,7 @@ function deterministicCausal(
   } else {
     steps.push(
       { order: 1, description: `Production signal received after deploy ${deployId}.`, evidenceRef: "signal" },
-      { order: 2, description: "Automatic causal analysis unavailable — Sarvam offline. Manual investigation required.", evidenceRef: "sarvam_unavailable" },
+      { order: 2, description: "Automatic causal analysis unavailable — Groq offline. Manual investigation required.", evidenceRef: "groq_unavailable" },
     );
   }
 
@@ -234,10 +234,10 @@ export async function handleIncident(
   // Gemini: parse long log/HTML text if present (LOW SURFACE AREA per CLAUDE.md).
   const parsedLog = await geminiParseSignal(signal);
 
-  // Sarvam: reconstruct the causal chain.
+  // Groq: reconstruct the causal chain.
   let causalOutput: CausalOutput;
   try {
-    causalOutput = await sarvamCausalChain(req.deployId, signal, parsedLog);
+    causalOutput = await groqCausalChain(req.deployId, signal, parsedLog);
   } catch {
     causalOutput = deterministicCausal(req.deployId, signal, baselineDelta);
   }
@@ -252,7 +252,7 @@ export async function handleIncident(
     userImpactSeconds: causalOutput.userImpactSeconds,
   };
 
-  // Add optional rollback timestamp if Sarvam recommends it.
+  // Add optional rollback timestamp if Groq recommends it.
   if (causalOutput.rollbackRecommended) {
     incident.rollbackAt = new Date().toISOString();
   }

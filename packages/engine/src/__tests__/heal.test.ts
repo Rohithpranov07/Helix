@@ -27,7 +27,7 @@ vi.mock("@helix/db", () => ({
 }));
 
 // confirm.ts and patch.ts pull these — keep them inert; we inject via deps anyway.
-vi.mock("@helix/ai", () => ({ sarvam: { chat: vi.fn() } }));
+vi.mock("@helix/ai", () => ({ groq: { chat: vi.fn() } }));
 
 import { healVulnerability, assertPromotable, type HealDeps, type HealRecord } from "../immune/heal.js";
 import { updateVulnerability } from "@helix/db";

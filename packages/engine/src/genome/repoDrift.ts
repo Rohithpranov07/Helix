@@ -4,8 +4,8 @@
  * Flow per module:
  *   1. Load intent strand from DB (seeded by repoIndex or prior capture).
  *   2. Gemini reads the current code + intent strand together (wide-context).
- *   3. Sarvam reasons about specific mismatches (strict-JSON).
- *   4. For each mismatch: Sarvam synthesizes a minimal patch (strict-JSON).
+ *   3. Groq reasons about specific mismatches (strict-JSON).
+ *   4. For each mismatch: Groq synthesizes a minimal patch (strict-JSON).
  *   5. Create a shadow branch on GitHub (helix-shadow-<ts>).
  *   6. Persist DriftReport to drift_report collection.
  *
@@ -19,11 +19,11 @@ import {
   updateIntentStrand,
   createDriftReport,
 } from "@helix/db";
-import { gemini, sarvam } from "@helix/ai";
+import { gemini, groq } from "@helix/ai";
 import { z } from "zod";
 import { getRepoTree, readFile } from "./github.js";
 
-// ── Sarvam JSON schemas ───────────────────────────────────────────────────────
+// ── Groq JSON schemas ───────────────────────────────────────────────────────
 
 const MismatchItemSchema = z.object({
   invariantId: z.string(),
@@ -178,18 +178,26 @@ export async function detectRepoDrift(
         });
         geminiAnalysis = geminiResult.content;
       } catch {
-        geminiAnalysis = "Gemini unavailable — proceeding with Sarvam analysis only.";
+        geminiAnalysis = "Gemini unavailable — proceeding with Groq analysis only.";
       }
 
-      // 4. Sarvam: structured mismatch reasoning (strict-JSON)
-      const analysisResult = await sarvam.chat({
+      // 4. Groq: structured mismatch reasoning (strict-JSON)
+      const analysisResult = await groq.chat({
         messages: [
           {
             role: "system",
             content:
               "You are HELIX Genome. Analyze code-vs-intent drift and output ONLY valid JSON.\n" +
               "Output EXACTLY: {\"pairingScore\":0.0-1.0,\"unpairedInvariants\":[\"id\"],\"mismatches\":[{\"invariantId\":\"id\",\"description\":\"what is wrong\",\"affectedFile\":\"path/to/file.ts\",\"severity\":\"high\"}],\"summary\":\"one sentence\"}\n" +
-              "pairingScore: 1.0 = fully paired, 0.0 = fully drifted. Only flag REAL violations, not style. Use empty arrays if nothing found.",
+              "pairingScore: 1.0 = fully paired, 0.0 = fully drifted. Only flag REAL violations, not style.\n" +
+              "Check EACH listed invariant against the code. In ADDITION, independently audit the code for these security vulnerability classes even if no invariant mentions them — report any you find as mismatches:\n" +
+              "  - SQLi: user input concatenated/interpolated into SQL or query strings instead of parameterized.\n" +
+              "  - XSS: user-controlled data rendered as raw HTML / dangerouslySetInnerHTML without escaping.\n" +
+              "  - authBypass: a protected route/handler that does not verify authentication or authorization before acting.\n" +
+              "  - secretLeak: a service-role key, API key, password, or other credential hardcoded or exposed to client-side/bundled code.\n" +
+              "  - missingRLS: a database table/migration holding per-user or sensitive rows without Row-Level Security (RLS) enabled/policy defined.\n" +
+              "For a vulnerability not covered by a listed invariant, set invariantId to \"security-<class>\" (e.g. \"security-secretLeak\") and set severity to \"critical\".\n" +
+              "If a module is genuinely clean, return pairingScore 1.0 and empty arrays.",
           },
           {
             role: "user",
@@ -216,7 +224,7 @@ export async function detectRepoDrift(
 
       if (analysis.pairingScore < worstScore) worstScore = analysis.pairingScore;
 
-      // 5. For each affected file: Sarvam synthesizes a minimal combined patch
+      // 5. For each affected file: Groq synthesizes a minimal combined patch
       const mismatchesByFile = new Map<string, typeof analysis.mismatches>();
       for (const m of analysis.mismatches) {
         if (!mismatchesByFile.has(m.affectedFile)) mismatchesByFile.set(m.affectedFile, []);
@@ -224,7 +232,7 @@ export async function detectRepoDrift(
       }
 
       for (const [affectedFile, fileMismatches] of mismatchesByFile) {
-        // Sarvam may report a path that wasn't in the pre-read set, or with a
+        // Groq may report a path that wasn't in the pre-read set, or with a
         // slightly different prefix. Resolve it instead of dropping the mismatch:
         //   1. exact key, 2. basename match within this module's files,
         //   3. fetch on demand from GitHub.
@@ -252,7 +260,7 @@ export async function detectRepoDrift(
 
         let patch: z.infer<typeof PatchSchema> | null = null;
         if (file) {
-          const patchResult = await sarvam.chat({
+          const patchResult = await groq.chat({
             messages: [
               {
                 role: "system",

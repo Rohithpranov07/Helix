@@ -39,3 +39,7 @@ shadow/staging/
 *.log
 npm-debug.log*
 pnpm-debug.log*
+
+# Local LLM provider setup scratch files (contain raw API keys)
+deepseek_v4_flash
+mimimax_m3_use

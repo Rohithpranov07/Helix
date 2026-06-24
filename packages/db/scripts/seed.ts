@@ -35,7 +35,7 @@ async function main() {
     ],
     edgeDecisions: ["Partial refunds round down to cents", "Guest checkout uses ephemeral session"],
     sourcePrompt: "Build a checkout module for ShopLite with Supabase Postgres",
-    generatedBy: { model: "sarvam-m", version: "1.0" },
+    generatedBy: { model: "qwen3.6-27b", version: "1.0" },
     pairing: { score: 0.94, lastChecked: now, unpairedInvariants: [] },
   });
   console.log(`intent_strand  _id=${strand._id}`);

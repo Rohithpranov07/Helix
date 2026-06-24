@@ -1,7 +1,7 @@
 /**
  * T6.1 — Intent strand capture (Genome organ)
  *
- * captureIntent: reads a source module, uses Sarvam (PRIMARY LLM) in strict-JSON
+ * captureIntent: reads a source module, uses Groq (PRIMARY LLM) in strict-JSON
  *   mode to extract the module's intent strand — purpose, invariants (with
  *   compliance flags), and edge-case design decisions — then persists it to
  *   the `intent_strand` MongoDB collection.
@@ -18,7 +18,7 @@ import { z } from "zod";
 import { readFileSync, existsSync } from "fs";
 import { resolve } from "path";
 import { ValidationError, type IntentStrand } from "@helix/shared";
-import { sarvam } from "@helix/ai";
+import { groq } from "@helix/ai";
 import {
   connectDb,
   createIntentStrand,
@@ -32,7 +32,7 @@ import type { HelixDoc } from "@helix/db";
 // packages/engine/src/genome/ → 4 levels up = repo root
 const REPO_ROOT = resolve(__dirname, "../../../../");
 
-// ── Sarvam extraction ─────────────────────────────────────────────────────────
+// ── Groq extraction ─────────────────────────────────────────────────────────
 
 const CaptureOutputSchema = z.object({
   purpose: z.string().min(10),
@@ -88,12 +88,12 @@ function buildCapturePrompt(
     .join("\n");
 }
 
-async function sarvamExtract(
+async function groqExtract(
   modulePath: string,
   source: string,
   context: string,
 ): Promise<z.infer<typeof CaptureOutputSchema>> {
-  const result = await sarvam.chat({
+  const result = await groq.chat({
     messages: [
       { role: "system", content: CAPTURE_SYSTEM },
       { role: "user", content: buildCapturePrompt(modulePath, source, context) },
@@ -132,7 +132,7 @@ function deterministicExtract(
       },
     ],
     edgeDecisions: [
-      "Sarvam was unavailable; intent extracted deterministically from module path and context.",
+      "Groq was unavailable; intent extracted deterministically from module path and context.",
     ],
   };
 }
@@ -161,10 +161,10 @@ export async function captureIntent(
   }
   const source = readFileSync(absPath, "utf8");
 
-  // Sarvam extracts purpose, invariants, edgeDecisions.
+  // Groq extracts purpose, invariants, edgeDecisions.
   let extracted: z.infer<typeof CaptureOutputSchema>;
   try {
-    extracted = await sarvamExtract(modulePath, source, context);
+    extracted = await groqExtract(modulePath, source, context);
   } catch {
     extracted = deterministicExtract(modulePath, context);
   }
@@ -180,7 +180,7 @@ export async function captureIntent(
     })),
     edgeDecisions: extracted.edgeDecisions,
     sourcePrompt: context || `Auto-captured from source: ${modulePath}`,
-    generatedBy: { model: "sarvam-m", version: "1" },
+    generatedBy: { model: "qwen3.6-27b", version: "1" },
     pairing: {
       score: 1.0,
       lastChecked: now,

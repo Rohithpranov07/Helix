@@ -87,7 +87,7 @@ const steps: readonly Step[] = [
     id: "2",
     name: "Diagnose",
     title: "Causal Chain Reconstructed",
-    description: "Sarvam reconstructs the causal chain from logs, the failing deploy, and the intent genome — pinpointing the exact commit and code path responsible.",
+    description: "Qwen3.6-27B reconstructs the causal chain from logs, the failing deploy, and the intent genome — pinpointing the exact commit and code path responsible.",
   },
   {
     id: "3",

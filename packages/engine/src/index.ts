@@ -128,7 +128,7 @@ export async function incidentHandle(req: IncidentHandleReq): Promise<IncidentHa
 
   const incident = await handleIncident(req);
 
-  // Auto-heal when Sarvam recommended rollback — full autonomous cure loop.
+  // Auto-heal when Groq recommended rollback — full autonomous cure loop.
   if (incident.rollbackAt) {
     try {
       const REPO_ROOT = findRepoRoot();
@@ -212,7 +212,7 @@ export async function genomePair(req: GenomePairReq): Promise<GenomePairRes> {
     //   1. Parse the unified diff to extract the target file path.
     //   2. Build a Patch object and apply it to the Shadow twin only.
     //   3. Write staging meta.json so verifyEquivalence can resolve class + endpoint.
-    //   4. Run verifyEquivalence: replay traffic, Sarvam judges, persist shadow_proof.
+    //   4. Run verifyEquivalence: replay traffic, Groq judges, persist shadow_proof.
     //   5. Return the proof — caller attaches it to the CorrectionProposal.
     // The real target is NEVER written here. Only the Shadow twin is touched.
     verifyCorrection: async (proposal) => {
@@ -244,7 +244,7 @@ export async function genomePair(req: GenomePairReq): Promise<GenomePairRes> {
         "utf8",
       );
 
-      // Verify equivalence — Sarvam judges whether the fix holds without regressions.
+      // Verify equivalence — Groq judges whether the fix holds without regressions.
       return verifyEquivalence(applied.patchRef);
     },
   });

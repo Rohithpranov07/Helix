@@ -3,9 +3,9 @@
  *
  * consolidate(repoPath, deps?):
  *   1. Collects source files from the repo.
- *   2. Sarvam (PRIMARY LLM) scans for duplicated implementations — identical or
+ *   2. Groq (PRIMARY LLM) scans for duplicated implementations — identical or
  *      near-identical code blocks that should be extracted to a shared location.
- *   3. For each duplication, Sarvam synthesizes a minimal consolidation patch
+ *   3. For each duplication, Groq synthesizes a minimal consolidation patch
  *      (unified diff) that extracts the shared code and updates all consumers.
  *   4. The patch MUST pass verifyEquivalence before any promotion. The Shadow
  *      invariant applies here identically to the Immune organ: no write reaches
@@ -22,7 +22,7 @@ import { z } from "zod";
 import { mkdirSync, writeFileSync } from "fs";
 import { resolve } from "path";
 import { ValidationError, VerificationError, type ShadowProof, type VulnClass } from "@helix/shared";
-import { sarvam } from "@helix/ai";
+import { groq } from "@helix/ai";
 import { connectDb, listEntropyPoints } from "@helix/db";
 import type { HelixDoc } from "@helix/db";
 import type { EntropyPoint } from "@helix/shared";
@@ -117,7 +117,7 @@ const NOT_WIRED = (name: string): never => {
   );
 };
 
-// ── Sarvam: find duplications ─────────────────────────────────────────────────
+// ── Groq: find duplications ─────────────────────────────────────────────────
 
 const FIND_SYSTEM = [
   "You are HELIX's Metabolism organ scanning for duplicated code that should be consolidated.",
@@ -137,8 +137,8 @@ const FIND_SYSTEM = [
   'Respond ONLY with JSON: { "duplications": [...] }',
 ].join("\n");
 
-async function sarvamFindDuplications(sources: string): Promise<Duplication[]> {
-  const result = await sarvam.chat({
+async function groqFindDuplications(sources: string): Promise<Duplication[]> {
+  const result = await groq.chat({
     messages: [
       { role: "system", content: FIND_SYSTEM },
       { role: "user", content: `Source files to scan:\n\n${sources.slice(0, 30_000)}` },
@@ -150,7 +150,7 @@ async function sarvamFindDuplications(sources: string): Promise<Duplication[]> {
   return parsed.duplications;
 }
 
-// ── Sarvam: synthesize consolidation patch ────────────────────────────────────
+// ── Groq: synthesize consolidation patch ────────────────────────────────────
 
 const SYNTH_SYSTEM = [
   "You are HELIX's Metabolism organ synthesizing a consolidation patch.",
@@ -164,8 +164,8 @@ const SYNTH_SYSTEM = [
   'Respond ONLY with JSON: { "files": [{ "path": string, "diff": string }], "rationale": string }',
 ].join("\n");
 
-async function sarvamSynthesizePatch(dup: Duplication, sources: string): Promise<Patch> {
-  const result = await sarvam.chat({
+async function groqSynthesizePatch(dup: Duplication, sources: string): Promise<Patch> {
+  const result = await groq.chat({
     messages: [
       { role: "system", content: SYNTH_SYSTEM },
       {
@@ -209,7 +209,7 @@ function inferConsolidationVulnClass(dup: Duplication): VulnClass {
 /**
  * Runs the consolidator repair enzyme over a repository.
  *
- * Finds duplications with Sarvam, synthesizes minimal patches, routes every patch
+ * Finds duplications with Groq, synthesizes minimal patches, routes every patch
  * through the Shadow gate (verifyEquivalence + assertPromotable) before promoting.
  * No consolidation reaches the real target without a shadow_proof with verdict:'promote'.
  * After all approved consolidations the enzyme re-measures entropy to show
@@ -225,8 +225,8 @@ export async function consolidate(
 
   const {
     collectSources = collectRepoSources,
-    findDuplications = sarvamFindDuplications,
-    synthesizePatch = sarvamSynthesizePatch,
+    findDuplications = groqFindDuplications,
+    synthesizePatch = groqSynthesizePatch,
     applyShadow = () => NOT_WIRED("applyShadow"),
     verify = () => NOT_WIRED("verifyEquivalence"),
     promote = () => NOT_WIRED("promote"),
@@ -258,7 +258,7 @@ export async function consolidate(
     throw new ValidationError(`consolidate: no source files found under "${repoPath}".`);
   }
 
-  // ── 3. Sarvam finds duplications ──────────────────────────────────────────
+  // ── 3. Groq finds duplications ──────────────────────────────────────────
   const allDuplications = await findDuplications(sources);
   const targets = allDuplications.slice(0, maxConsolidations);
 
@@ -268,7 +268,7 @@ export async function consolidate(
 
   // ── 4. Process each duplication through the Shadow gate ───────────────────
   for (const dup of targets) {
-    // 4a. Sarvam synthesizes the consolidation patch.
+    // 4a. Groq synthesizes the consolidation patch.
     let patch: Patch;
     try {
       patch = await synthesizePatch(dup, sources);

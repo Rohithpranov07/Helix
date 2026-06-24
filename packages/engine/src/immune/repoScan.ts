@@ -4,8 +4,8 @@
  * Flow (per §4 spec):
  *   1. Fetch source files from the connected GitHub repo (OAuth token from Genome).
  *   2. Gemini: wide-context static analysis — find SQLi, XSS, authBypass, secretLeak, missingRLS.
- *   3. Sarvam: extract structured findings (class, endpoint, evidence, affected file).
- *   4. Sarvam: per-finding, synthesize the minimal patch targeting the real repo file.
+ *   3. Groq: extract structured findings (class, endpoint, evidence, affected file).
+ *   4. Groq: per-finding, synthesize the minimal patch targeting the real repo file.
  *   5. Create a shadow branch on GitHub (helix-immune-<ts>).
  *   6. Persist ImmuneScanRun with status='pending_approval'.
  *
@@ -17,7 +17,7 @@
  *
  * Stack mapping (CLAUDE.md):
  *   Gemini = wide-context whole-repo analysis (§4: "Parses responses / DOM / errors").
- *   Sarvam = finding extraction + patch synthesis (§4: "Patch synthesis for the specific vuln class").
+ *   Groq = finding extraction + patch synthesis (§4: "Patch synthesis for the specific vuln class").
  *   MongoDB = immune_scan_run collection + antibody collection.
  */
 
@@ -32,7 +32,7 @@ import {
   findAntibodyByAntibodyId,
   createShadowProof,
 } from "@helix/db";
-import { gemini, sarvam, embed } from "@helix/ai";
+import { gemini, groq, embed } from "@helix/ai";
 import { z } from "zod";
 import { createHash } from "crypto";
 import {
@@ -45,7 +45,7 @@ import {
   createPR,
 } from "../genome/github.js";
 
-// ── Sarvam JSON schemas ───────────────────────────────────────────────────────
+// ── Groq JSON schemas ───────────────────────────────────────────────────────
 
 const FindingItemSchema = z
   .object({
@@ -183,13 +183,13 @@ export async function immuneScanRepo(opts: RepoScanOptions): Promise<ImmuneScanR
     });
     geminiAnalysis = result.content;
   } catch {
-    geminiAnalysis = "Gemini unavailable — proceeding with Sarvam static analysis only.";
+    geminiAnalysis = "Gemini unavailable — proceeding with Groq static analysis only.";
   }
 
-  // 4. Sarvam: structured finding extraction (strict-JSON)
+  // 4. Groq: structured finding extraction (strict-JSON)
   let extracted: z.infer<typeof FindingsListSchema> = { findings: [] };
   try {
-    const findingsResult = await sarvam.chat({
+    const findingsResult = await groq.chat({
       messages: [
         {
           role: "system",
@@ -218,7 +218,7 @@ export async function immuneScanRepo(opts: RepoScanOptions): Promise<ImmuneScanR
     console.warn("[repoScan] findings extraction failed, storing scan with zero findings:", e instanceof Error ? e.message : e);
   }
 
-  // 5. Per-finding: Sarvam synthesizes a minimal patch targeting the real repo file
+  // 5. Per-finding: Groq synthesizes a minimal patch targeting the real repo file
   const immuneFindings: ImmuneFinding[] = [];
 
   for (const finding of extracted.findings) {
@@ -247,7 +247,7 @@ export async function immuneScanRepo(opts: RepoScanOptions): Promise<ImmuneScanR
     }
 
     try {
-      const patchResult = await sarvam.chat({
+      const patchResult = await groq.chat({
         messages: [
           {
             role: "system",

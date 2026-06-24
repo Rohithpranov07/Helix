@@ -186,7 +186,7 @@ export async function healVulnerability(
   let lastProof: ShadowProof | undefined;
 
   for (let attempt = 1; attempt <= d.maxAttempts; attempt++) {
-    // 2. Synthesize a class-appropriate minimal patch (Sarvam).
+    // 2. Synthesize a class-appropriate minimal patch (Groq).
     const patch = await d.synthesize(finding);
 
     // 3. Apply to the Shadow ONLY (sets status:'patching', patchRef). Never the real target.

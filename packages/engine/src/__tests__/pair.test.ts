@@ -10,7 +10,7 @@ const {
   mockListIntentStrands,
   mockUpdateIntentStrand,
   mockGeminiAnalyze,
-  mockSarvamChat,
+  mockGroqChat,
   mockReadFileSync,
   mockExistsSync,
 } = vi.hoisted(() => ({
@@ -18,7 +18,7 @@ const {
   mockListIntentStrands: vi.fn(),
   mockUpdateIntentStrand: vi.fn(),
   mockGeminiAnalyze: vi.fn(),
-  mockSarvamChat: vi.fn(),
+  mockGroqChat: vi.fn(),
   mockReadFileSync: vi.fn(),
   mockExistsSync: vi.fn(),
 }));
@@ -31,7 +31,7 @@ vi.mock("@helix/db", () => ({
 
 vi.mock("@helix/ai", () => ({
   gemini: { analyze: mockGeminiAnalyze },
-  sarvam: { chat: mockSarvamChat },
+  groq: { chat: mockGroqChat },
 }));
 
 vi.mock("fs", () => ({
@@ -93,7 +93,7 @@ function makeStrand(overrides: Partial<IntentStrand> = {}): HelixDoc<IntentStran
     ],
     edgeDecisions: ["Falls back to mock data when Supabase is unavailable."],
     sourcePrompt: "PR: Admin order page",
-    generatedBy: { model: "sarvam-m", version: "1" },
+    generatedBy: { model: "qwen3.6-27b", version: "1" },
     pairing: { score: 1.0, lastChecked: "2026-01-01T00:00:00.000Z", unpairedInvariants: [] },
     ...overrides,
   } as HelixDoc<IntentStrand>;
@@ -115,7 +115,7 @@ function makeGeminiOutput(overrides: Record<string, unknown> = {}): string {
   });
 }
 
-function makeSarvamCorrection(): string {
+function makeGroqCorrection(): string {
   return JSON.stringify({
     explanation:
       "The code processes refunds without checking for an approval record. The inv-2 compliance invariant requires a dual-control gate before any high-value mutation.",
@@ -140,7 +140,7 @@ beforeEach(() => {
   mockListIntentStrands.mockClear();
   mockUpdateIntentStrand.mockClear();
   mockGeminiAnalyze.mockClear();
-  mockSarvamChat.mockClear();
+  mockGroqChat.mockClear();
   mockReadFileSync.mockClear();
   mockExistsSync.mockClear();
 
@@ -149,7 +149,7 @@ beforeEach(() => {
   mockListIntentStrands.mockResolvedValue([makeStrand()]);
   mockUpdateIntentStrand.mockResolvedValue(makeStrand());
   mockGeminiAnalyze.mockResolvedValue({ content: makeGeminiOutput() });
-  mockSarvamChat.mockResolvedValue({ content: makeSarvamCorrection() });
+  mockGroqChat.mockResolvedValue({ content: makeGroqCorrection() });
 });
 
 // ── Happy path — mismatch detection ──────────────────────────────────────────
@@ -246,7 +246,7 @@ describe("pairGenome — correction proposal shape", () => {
     }
   });
 
-  it("correction explanation comes from Sarvam", async () => {
+  it("correction explanation comes from Groq", async () => {
     const result = await pairGenome(MODULE_ID);
     expect(result.corrections[0]?.explanation).toContain("approval record");
   });
@@ -492,14 +492,14 @@ describe("pairGenome — injectable analyze + explain deps", () => {
     expect(mockGeminiAnalyze).not.toHaveBeenCalled();
   });
 
-  it("uses injected explain dep instead of Sarvam", async () => {
+  it("uses injected explain dep instead of Groq", async () => {
     const mockExplain = vi.fn().mockResolvedValue({
       explanation: "Custom explanation.",
       suggestedPatch: SUGGESTED_PATCH,
     });
     await pairGenome(MODULE_ID, { explain: mockExplain });
     expect(mockExplain).toHaveBeenCalledTimes(1);
-    expect(mockSarvamChat).not.toHaveBeenCalled();
+    expect(mockGroqChat).not.toHaveBeenCalled();
   });
 
   it("does not produce corrections when no mismatches exist", async () => {
@@ -513,7 +513,7 @@ describe("pairGenome — injectable analyze + explain deps", () => {
     });
     const result = await pairGenome(MODULE_ID);
     expect(result.corrections).toHaveLength(0);
-    expect(mockSarvamChat).not.toHaveBeenCalled();
+    expect(mockGroqChat).not.toHaveBeenCalled();
   });
 });
 
@@ -540,10 +540,10 @@ describe("pairGenome — error cases", () => {
     expect((err as Error).message).toContain("Gemini timeout");
   });
 
-  it("propagates Sarvam errors to the caller", async () => {
-    mockSarvamChat.mockRejectedValue(new Error("Sarvam 429"));
+  it("propagates Groq errors to the caller", async () => {
+    mockGroqChat.mockRejectedValue(new Error("Groq 429"));
     const err = await pairGenome(MODULE_ID).catch((e: unknown) => e);
-    expect((err as Error).message).toContain("Sarvam 429");
+    expect((err as Error).message).toContain("Groq 429");
   });
 
   it("throws when Gemini returns malformed JSON", async () => {
